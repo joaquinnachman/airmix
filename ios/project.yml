@@ -1,0 +1,35 @@
+name: AirMix
+options:
+  bundleIdPrefix: ar.joaquin
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  AirMix:
+    type: application
+    platform: iOS
+    sources: [AirMix]
+    scheme: {}
+    info:
+      path: AirMix/Info.plist
+      properties:
+        CFBundleDisplayName: AirMix
+        CFBundleShortVersionString: "0.4"
+        CFBundleVersion: "5"
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        NSLocalNetworkUsageDescription: "AirMix se conecta a tu consola por la red local."
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ar.joaquin.airmix
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGN_IDENTITY: ""

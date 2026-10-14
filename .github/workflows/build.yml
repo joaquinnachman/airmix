@@ -1,11 +1,11 @@
-name: Build APK
+name: Build Android + iOS
 on:
   push:
   workflow_dispatch:
 permissions:
   contents: write
 jobs:
-  build:
+  android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,16 +14,47 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - run: chmod +x gradlew && ./gradlew assembleDebug --stacktrace
-      - run: cp app/build/outputs/apk/debug/app-debug.apk AirMix.apk
+      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug --stacktrace
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk AirMix.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: AirMix-apk
+          name: android
           path: AirMix.apk
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd ios && xcodegen generate
+      - name: Compilar (sin firmar)
+        run: |
+          cd ios
+          xcodebuild -project AirMix.xcodeproj -scheme AirMix -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -n 80
+          test "${PIPESTATUS[0]}" -eq 0
+      - name: Empaquetar IPA
+        run: |
+          mkdir -p Payload
+          cp -R ios/build/Build/Products/Release-iphoneos/AirMix.app Payload/
+          zip -qr AirMix-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: AirMix-unsigned.ipa
+
+  release:
+    needs: [android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: AirMix build ${{ github.run_number }}
           make_latest: true
-          files: AirMix.apk
+          files: |
+            android/AirMix.apk
+            ios/AirMix-unsigned.ipa
