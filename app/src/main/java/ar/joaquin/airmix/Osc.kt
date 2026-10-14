@@ -70,8 +70,12 @@ object Osc {
                     'i' -> { args.add(bb.getInt(p)); p += 4 }
                     'f' -> { args.add(bb.getFloat(p)); p += 4 }
                     's' -> {
+                        // Algunas respuestas (/node) vienen sin el 0 final: tomamos hasta el fin del paquete.
                         val e = indexOfZero(data, p, len)
-                        if (e < 0) return OscMessage(address, args)
+                        if (e < 0) {
+                            args.add(String(data, p, len - p, CS))
+                            return OscMessage(address, args)
+                        }
                         args.add(String(data, p, e - p, CS))
                         p = padded(e + 1)
                     }

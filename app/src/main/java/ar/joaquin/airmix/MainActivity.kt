@@ -3,12 +3,15 @@ package ar.joaquin.airmix
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -21,7 +24,12 @@ import android.widget.TextView
 import android.widget.Toast
 
 class MainActivity : Activity() {
-    enum class Tab(val label: String) { MIX("MEZCLA"), FX("EFECTOS"), METERS("MEDIDORES") }
+    enum class Tab(val label: String) { MIX("MEZCLA"), FX("EFECTOS"), METERS("MEDIDORES"), SCENES("ESCENAS") }
+
+    companion object {
+        private const val REQ_SAVE = 41
+        private const val REQ_OPEN = 42
+    }
 
     private var tab = Tab.MIX
     private var layers: List<Layer> = emptyList()
@@ -31,6 +39,11 @@ class MainActivity : Activity() {
     private var section = Section.CONFIG
 
     private lateinit var content: FrameLayout
+    private lateinit var notesPanel: View
+    private lateinit var notesEdit: EditText
+    private lateinit var timerLabel: TextView
+    private var lastTimerText = ""
+    private var pendingExport: String? = null
     private lateinit var rail: LinearLayout
     private lateinit var modelLabel: TextView
     private lateinit var conn: Btn
@@ -55,6 +68,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         prefs().getString("model", null)?.let { App.applyModel(it) }
+        ShowTimer.load(prefs())
         if (App.client == null) App.client = MixerClient(applicationContext).also { it.start() }
         App.client?.x32 = App.console.isX32
         setContentView(buildRoot())
@@ -123,6 +137,10 @@ class MainActivity : Activity() {
         while (n < 500) {
             val m = c.incoming.poll() ?: break
             n++
+            if (m.address == "node" || m.address == "/node") {
+                Scenes.onNode(m.args.getOrNull(0)?.toString() ?: "")
+                continue
+            }
             if (m.address == "/xinfo") {
                 if (m.args.size >= 4) onXinfo(m.args[1].toString(), m.args[2].toString(), m.args[3].toString())
                 continue
@@ -146,6 +164,22 @@ class MainActivity : Activity() {
             }
         }
         if (connected) for (v in App.meterViews) v.invalidate()
+        updateTimer()
+    }
+
+    private fun updateTimer() {
+        val ms = ShowTimer.elapsed()
+        val t = ShowTimer.format(ms)
+        if (t == lastTimerText) return
+        lastTimerText = t
+        timerLabel.text = t
+        timerLabel.setTextColor(
+            when {
+                ShowTimer.isRunning() -> C.GREEN
+                ms > 0 -> C.SOLO
+                else -> C.TEXT_DIM
+            }
+        )
     }
 
     private fun onXinfo(name: String, model: String, fw: String) {
@@ -187,7 +221,7 @@ class MainActivity : Activity() {
         logo.letterSpacing = 0.15f
         top.addView(logo, lp(WRAP, MATCH))
         modelLabel = label(App.console.model, 13f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL)
-        top.addView(modelLabel, lp(dp(150), MATCH).m(l = dp(14)))
+        top.addView(modelLabel, lp(dp(140), MATCH).m(l = dp(14)))
         for (t in Tab.values()) {
             val b = Btn(this, t.label, BtnStyle.TAB, 16f)
             b.setOnClickListener {
@@ -195,7 +229,7 @@ class MainActivity : Activity() {
                 render()
             }
             tabBtns[t] = b
-            top.addView(b, lp(dp(130), dp(40)).m(r = dp(8)))
+            top.addView(b, lp(dp(124), dp(40)).m(r = dp(6)))
         }
         top.addView(View(this), lp(0, 1, 1f))
         conn = Btn(this, "", BtnStyle.OUTLINE, 14f)
@@ -209,8 +243,13 @@ class MainActivity : Activity() {
         rail = col()
         rail.setBackgroundColor(C.NAV_BG)
         body.addView(rail, lp(dp(116), MATCH))
+        val host = FrameLayout(this)
         content = FrameLayout(this)
-        body.addView(content, lp(0, MATCH, 1f))
+        host.addView(content, FrameLayout.LayoutParams(MATCH, MATCH))
+        notesPanel = buildNotes()
+        notesPanel.visibility = View.GONE
+        host.addView(notesPanel, FrameLayout.LayoutParams(dp(420), MATCH, Gravity.END))
+        body.addView(host, lp(0, MATCH, 1f))
         root.addView(body, lp(MATCH, 0, 1f))
         return root
     }
@@ -221,6 +260,35 @@ class MainActivity : Activity() {
         if (layerIdx >= layers.size) layerIdx = 0
         rail.removeAllViews()
         layerBtns.clear()
+
+        val timerBox = col()
+        timerBox.gravity = Gravity.CENTER
+        timerBox.background = rounded(C.SURFACE, 12)
+        timerBox.addView(label("SHOW", 11f, C.TEXT_DIM), lp(MATCH, dp(16)))
+        timerLabel = label("00:00", 24f, C.TEXT_DIM)
+        lastTimerText = ""
+        timerBox.addView(timerLabel, lp(MATCH, dp(30)))
+        timerBox.addView(label("tocá: ▶ / ❚❚", 10f, C.TICK), lp(MATCH, dp(14)))
+        timerBox.isClickable = true
+        timerBox.setOnClickListener {
+            ShowTimer.toggle(prefs())
+            lastTimerText = ""
+            updateTimer()
+        }
+        timerBox.setOnLongClickListener {
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setMessage("¿Poner el cronómetro en cero?")
+                .setPositiveButton("Reset") { _, _ ->
+                    ShowTimer.reset(prefs())
+                    lastTimerText = ""
+                    updateTimer()
+                }
+                .setNegativeButton("Cancelar", null)
+                .setOnDismissListener { hideBars() }
+                .show()
+            true
+        }
+        rail.addView(timerBox, lp(MATCH, dp(76)).m(dp(10), dp(10), dp(10), dp(2)))
 
         val list = col()
         list.setPadding(dp(10), dp(8), dp(10), dp(8))
@@ -239,6 +307,10 @@ class MainActivity : Activity() {
         sv.isVerticalScrollBarEnabled = false
         sv.addView(list, FrameLayout.LayoutParams(MATCH, WRAP))
         rail.addView(sv, lp(MATCH, 0, 1f))
+
+        val notesBtn = Btn(this, "✎ NOTAS", BtnStyle.OUTLINE, 15f)
+        notesBtn.setOnClickListener { toggleNotes() }
+        rail.addView(notesBtn, lp(MATCH, dp(44)).m(dp(10), dp(8), dp(10), 0))
 
         val fx = Btn(this, "MUTE\nFX", BtnStyle.MUTE, 17f)
         fx.maxLines = 2
@@ -274,6 +346,7 @@ class MainActivity : Activity() {
             }
             Tab.FX -> Panels.effects(this)
             Tab.METERS -> AllMetersView(this).also { it.setBackgroundColor(C.BG) }
+            Tab.SCENES -> buildScenes()
         }
         content.addView(v, FrameLayout.LayoutParams(MATCH, MATCH))
     }
@@ -498,6 +571,262 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Conectando a ${ip.trim()}…", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "IP inválida", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ------------------------------------------------------------------ NOTAS
+
+    private val saveNotes = Runnable { prefs().edit().putString("notes", notesEdit.text.toString()).apply() }
+
+    private fun buildNotes(): View {
+        val panel = col()
+        panel.background = rounded(C.SURFACE, 16, C.LINE)
+        panel.setPadding(dp(16), dp(12), dp(16), dp(16))
+        panel.isClickable = true
+        panel.elevation = dp(12).toFloat()
+
+        val head = row()
+        head.addView(label("NOTAS", 18f, C.TEXT, Gravity.START or Gravity.CENTER_VERTICAL), lp(0, dp(44), 1f))
+        val mark = Btn(this, "+ MARCA", BtnStyle.LIGHT, 15f)
+        mark.setOnClickListener { insertMark() }
+        head.addView(mark, lp(dp(100), dp(40)).m(r = dp(8)))
+        val clear = Btn(this, "BORRAR", BtnStyle.OUTLINE, 14f)
+        clear.setOnClickListener {
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setMessage("¿Borrar todas las notas?")
+                .setPositiveButton("Borrar") { _, _ -> notesEdit.setText("") }
+                .setNegativeButton("Cancelar", null)
+                .setOnDismissListener { hideBars() }
+                .show()
+        }
+        head.addView(clear, lp(dp(84), dp(40)).m(r = dp(8)))
+        val close = Btn(this, "✕", BtnStyle.OUTLINE, 16f)
+        close.setOnClickListener { toggleNotes() }
+        head.addView(close, lp(dp(44), dp(40)))
+        panel.addView(head)
+
+        notesEdit = EditText(this)
+        notesEdit.setTextColor(C.TEXT)
+        notesEdit.setHintTextColor(C.TICK)
+        notesEdit.hint = "Anotá lo que necesites: cambios de set, problemas de monitor, pedidos…"
+        notesEdit.textSize = 17f
+        notesEdit.gravity = Gravity.TOP or Gravity.START
+        notesEdit.background = rounded(C.BG, 12)
+        notesEdit.setPadding(dp(14), dp(12), dp(14), dp(12))
+        notesEdit.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        notesEdit.setText(prefs().getString("notes", ""))
+        notesEdit.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                handler.removeCallbacks(saveNotes)
+                handler.postDelayed(saveNotes, 700)
+            }
+        })
+        panel.addView(notesEdit, lp(MATCH, 0, 1f).m(t = dp(8)))
+        val wrap = FrameLayout(this)
+        wrap.setPadding(dp(8), dp(8), dp(8), dp(8))
+        wrap.addView(panel, FrameLayout.LayoutParams(MATCH, MATCH))
+        return wrap
+    }
+
+    private fun toggleNotes() {
+        val show = notesPanel.visibility != View.VISIBLE
+        notesPanel.visibility = if (show) View.VISIBLE else View.GONE
+        if (!show) {
+            notesEdit.clearFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.hideSoftInputFromWindow(notesEdit.windowToken, 0)
+            saveNotes.run()
+            hideBars()
+        }
+    }
+
+    /** Inserta "[12:34] " con el tiempo del show (o la hora, si el cronómetro está en cero). */
+    private fun insertMark() {
+        val ms = ShowTimer.elapsed()
+        val stamp = if (ms > 0) ShowTimer.format(ms)
+        else java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date())
+        val ed = notesEdit.text
+        var pos = notesEdit.selectionStart
+        if (pos < 0) pos = ed.length
+        val prefix = if (pos > 0 && ed[pos - 1] != '\n') "\n" else ""
+        ed.insert(pos, "$prefix[$stamp] ")
+        notesEdit.requestFocus()
+    }
+
+    // ------------------------------------------------------------------ ESCENAS
+
+    private fun scenesDir(): java.io.File = java.io.File(filesDir, "scenes").also { it.mkdirs() }
+
+    private fun safeName(n: String): String =
+        n.trim().ifEmpty { "escena" }.replace(Regex("[^A-Za-z0-9 _\\-áéíóúñÁÉÍÓÚÑ]"), "_").take(40)
+
+    private fun buildScenes(): View {
+        val root = row()
+        root.gravity = Gravity.TOP
+        root.setBackgroundColor(C.BG)
+        root.setPadding(dp(14), dp(14), dp(14), dp(14))
+
+        // --- guardar
+        val left = col()
+        val saveCard = card()
+        saveCard.addView(sectionTitle("GUARDAR LA MEZCLA ACTUAL"), lp(MATCH, dp(24)))
+        val name = EditText(this)
+        name.setTextColor(C.TEXT)
+        name.setHintTextColor(C.TICK)
+        name.hint = "Nombre de la escena"
+        name.setText("GYP " + java.text.SimpleDateFormat("dd-MM", java.util.Locale.US).format(java.util.Date()))
+        name.setSingleLine()
+        name.background = rounded(C.BG, 10, C.LINE)
+        name.setPadding(dp(14), 0, dp(14), 0)
+        saveCard.addView(name, lp(MATCH, dp(50)).m(t = dp(8)))
+        val notes = EditText(this)
+        notes.setTextColor(C.TEXT)
+        notes.setHintTextColor(C.TICK)
+        notes.hint = "Nota (opcional): lugar, fecha…"
+        notes.setSingleLine()
+        notes.background = rounded(C.BG, 10, C.LINE)
+        notes.setPadding(dp(14), 0, dp(14), 0)
+        saveCard.addView(notes, lp(MATCH, dp(50)).m(t = dp(8)))
+        val save = Btn(this, "LEER CONSOLA Y GUARDAR", BtnStyle.LIGHT, 17f)
+        save.activeColor = C.ACCENT
+        save.active = true
+        save.setOnClickListener { Scenes.save(name.text.toString(), notes.text.toString()) }
+        saveCard.addView(save, lp(MATCH, dp(54)).m(t = dp(12)))
+        saveCard.addView(
+            label("Se guarda en la tablet y te ofrece exportar el .scn (Drive, Descargas…). Se abre en X-Air Edit / X32-Edit.", 13f, C.TEXT_DIM, Gravity.START).also { it.maxLines = 3 },
+            lp(MATCH, WRAP).m(t = dp(10))
+        )
+        left.addView(saveCard, lp(MATCH, WRAP))
+
+        val statusCard = card()
+        statusCard.addView(sectionTitle("ESTADO"), lp(MATCH, dp(24)))
+        val status = label("Listo.", 15f, C.TEXT, Gravity.START or Gravity.TOP)
+        status.maxLines = 8
+        statusCard.addView(status, lp(MATCH, WRAP).m(t = dp(6)))
+        left.addView(statusCard, lp(MATCH, WRAP).m(t = dp(14)))
+        Scenes.onStatus = { msg -> status.text = msg }
+        Scenes.onSaveReady = { n, text -> onSceneRead(n, text) }
+        root.addView(left, lp(0, MATCH, 1f).m(r = dp(14)))
+
+        // --- cargar
+        val loadCard = card()
+        val head = row()
+        head.addView(sectionTitle("ESCENAS EN LA TABLET"), lp(0, dp(40), 1f))
+        val open = Btn(this, "ABRIR .scn…", BtnStyle.OUTLINE, 15f)
+        open.setOnClickListener { openDocument() }
+        head.addView(open, lp(dp(140), dp(40)))
+        loadCard.addView(head)
+        val list = col()
+        val files = scenesDir().listFiles()?.filter { it.name.endsWith(".scn") }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        if (files.isEmpty()) {
+            list.addView(label("Todavía no hay escenas guardadas.", 15f, C.TEXT_DIM, Gravity.START), lp(MATCH, dp(40)))
+        }
+        val df = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.US)
+        for (file in files) {
+            val r = row()
+            r.background = rounded(C.SURFACE2, 10)
+            r.setPadding(dp(14), 0, dp(8), 0)
+            val t = label(file.name.removeSuffix(".scn"), 17f, C.TEXT, Gravity.START or Gravity.CENTER_VERTICAL)
+            r.addView(t, lp(0, MATCH, 1f))
+            r.addView(label(df.format(java.util.Date(file.lastModified())), 13f, C.TEXT_DIM), lp(dp(100), MATCH))
+            val load = Btn(this, "CARGAR", BtnStyle.LIGHT, 15f)
+            load.activeColor = C.SENDS
+            load.active = true
+            load.setOnClickListener {
+                val text = file.readText(Charsets.ISO_8859_1)
+                confirmLoad(Scenes.parse(text, file.name.removeSuffix(".scn")))
+            }
+            r.addView(load, lp(dp(100), dp(40)).m(r = dp(6)))
+            val share = Btn(this, "EXPORTAR", BtnStyle.OUTLINE, 13f)
+            share.setOnClickListener { exportDocument(file.name.removeSuffix(".scn"), file.readText(Charsets.ISO_8859_1)) }
+            r.addView(share, lp(dp(90), dp(40)).m(r = dp(6)))
+            val del = Btn(this, "✕", BtnStyle.OUTLINE, 15f)
+            del.setOnClickListener {
+                AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setMessage("¿Borrar \"${file.name}\" de la tablet?")
+                    .setPositiveButton("Borrar") { _, _ ->
+                        file.delete()
+                        render()
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .setOnDismissListener { hideBars() }
+                    .show()
+            }
+            r.addView(del, lp(dp(44), dp(40)))
+            list.addView(r, lp(MATCH, dp(56)).m(t = dp(8)))
+        }
+        loadCard.addView(scroll(list), lp(MATCH, 0, 1f).m(t = dp(6)))
+        root.addView(loadCard, lp(0, MATCH, 1.3f))
+        return root
+    }
+
+    private fun onSceneRead(name: String, text: String) {
+        val f = java.io.File(scenesDir(), safeName(name) + ".scn")
+        f.writeText(text, Charsets.ISO_8859_1)
+        if (tab == Tab.SCENES) render()
+        Scenes.onStatus?.invoke("✓ Guardada en la tablet como \"${f.name}\".")
+        exportDocument(name, text)
+    }
+
+    private fun confirmLoad(scene: Scenes.Scene) {
+        if (Scenes.busy()) return
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Cargar \"${scene.name}\"")
+            .setMessage("Esto reemplaza la mezcla actual de la consola (${scene.lines.size} bloques).\n\nAntes de cargar se verifica el formato con la consola; lo que no se pueda verificar queda como está.")
+            .setPositiveButton("Cargar") { _, _ -> Scenes.load(scene) }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun exportDocument(name: String, text: String) {
+        pendingExport = text
+        val i = Intent(Intent.ACTION_CREATE_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/octet-stream")
+            .putExtra(Intent.EXTRA_TITLE, safeName(name) + ".scn")
+        try { startActivityForResult(i, REQ_SAVE) } catch (_: Exception) {}
+    }
+
+    @Suppress("DEPRECATION")
+    private fun openDocument() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("*/*")
+        try { startActivityForResult(i, REQ_OPEN) } catch (_: Exception) {}
+    }
+
+    @Deprecated("Activity API")
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        hideBars()
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) return
+        try {
+            if (requestCode == REQ_SAVE) {
+                val text = pendingExport ?: return
+                contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.ISO_8859_1)) }
+                pendingExport = null
+                Toast.makeText(this, "Escena exportada", Toast.LENGTH_SHORT).show()
+            } else if (requestCode == REQ_OPEN) {
+                val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.ISO_8859_1) } ?: return
+                var display = uri.lastPathSegment ?: "escena"
+                display = display.substringAfterLast('/').substringAfterLast(':').removeSuffix(".scn")
+                val scene = Scenes.parse(text, display)
+                if (scene.lines.isEmpty()) {
+                    Toast.makeText(this, "Ese archivo no parece una escena .scn", Toast.LENGTH_LONG).show()
+                    return
+                }
+                java.io.File(scenesDir(), safeName(scene.name) + ".scn").writeText(text, Charsets.ISO_8859_1)
+                if (tab == Tab.SCENES) render()
+                confirmLoad(scene)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "No se pudo leer/escribir el archivo: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 }

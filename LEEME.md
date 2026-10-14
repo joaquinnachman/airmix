@@ -1,5 +1,17 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.3
+- **ESCENAS (.scn).** Nueva pestaña para guardar y cargar escenas.
+  - Guardar lee la consola completa y crea un .scn compatible con X-Air Edit / X32-Edit. Queda en la tablet y te ofrece exportarlo a Drive, Descargas, etc.
+  - Cargar abre un .scn (tuyo o de X-Air Edit) y lo manda a la consola. Antes de cargar, la app verifica con la consola que entiende bien cada campo. Lo que no puede verificar queda como estaba y te lo informa.
+  - Todavía no carga parámetros internos de los efectos ni el ruteo.
+- **Cronómetro de show** arriba en el riel.
+  - Tocá para arrancar o pausar. Mantené apretado para ponerlo en cero.
+  - Sigue contando aunque cierres la app.
+- **NOTAS.** Panel lateral que se abre desde el riel.
+  - Se guarda solo.
+  - "+ MARCA" inserta el tiempo del show, por ejemplo [42:10], para anotar en qué momento pasó algo.
+
 ## Novedades 0.2
 - **Multi-consola.** XR12, XR16, XR18/X18/MR18 y X32/M32. La app detecta el modelo y el puerto sola (X Air usa 10024, X32 usa 10023) y arma las capas, buses, matrices, DCAs y envíos que correspondan.
 - **MUTE FX** en el riel izquierdo, siempre a mano: mutea todos los efectos de un toque para hablar entre tema y tema, y al volver a tocarlo restaura solo los que estaban abiertos.

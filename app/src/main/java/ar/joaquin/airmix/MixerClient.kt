@@ -92,6 +92,9 @@ class MixerClient(private val ctx: Context) {
 
     fun query(address: String) = enqueue("$address?", Osc.encode(address))
 
+    /** Pide un bloque completo en formato texto (para escenas .scn). */
+    fun node(path: String) = enqueue("node:$path", Osc.encode("/node", path))
+
     private fun enqueue(key: String, bytes: ByteArray) {
         if (pending.put(key, bytes) == null) order.offer(key)
     }
