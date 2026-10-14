@@ -295,10 +295,11 @@ class DynGraphView(ctx: Context, p: String, private val gate: Boolean) : View(ct
         return if (gate) {
             val thr = Fmt.lin(-80f, 0f, st.float(thrA, 0f))
             val range = Fmt.lin(3f, 60f, st.float(rangeA, 1f))
+            val name = App.console.gateModes.getOrElse(mode) { "GATE" }
             when {
                 x >= thr -> x
-                mode <= 2 -> maxOf(thr + (x - thr) * (mode + 2), x - range)
-                mode == 3 -> x - range
+                name.startsWith("EXP") -> maxOf(thr + (x - thr) * (name.last() - '0'), x - range)
+                name == "GATE" -> x - range
                 else -> x
             }
         } else {

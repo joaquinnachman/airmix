@@ -68,7 +68,6 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
 }
 
 object Panels {
-    private val GATE_MODES = listOf("EXP 2", "EXP 3", "EXP 4", "GATE", "DUCK")
     private val DYN_MODES = listOf("COMP", "EXP")
     private val EQ_TYPES = listOf("LCut", "LShv", "PEQ", "VEQ", "HShv", "HCut")
     private val RATIOS = listOf("1.1", "1.3", "1.5", "2.0", "2.5", "3.0", "4.0", "5.0", "7.0", "10", "20", "100")
@@ -173,7 +172,8 @@ object Panels {
             pre.addView(src, lp(MATCH, dp(26)))
             val r3 = row()
             if (ha != null) r3.addView(knob(Spec("GAIN", "$ha/gain", def = 12f / 72f) { Fmt.db(Fmt.lin(-12f, 60f, it)) }))
-            r3.addView(knob(Spec("TRIM", "$p/preamp/trim", def = 0.5f, bipolar = true) { Fmt.db(Fmt.lin(-18f, 18f, it)) }))
+            // X32 tiene TRIM digital por canal; en X Air la ganancia de entrada es solo el headamp.
+            if (isX32) r3.addView(knob(Spec("TRIM", "$p/preamp/trim", def = 0.5f, bipolar = true) { Fmt.db(Fmt.lin(-18f, 18f, it)) }))
             r3.addView(knob(Spec("LOW CUT", "$p/preamp/hpf", def = 0f) { Fmt.hz(Fmt.log(20f, 400f, it)) }))
             pre.addView(r3)
             val r4 = row()
@@ -204,7 +204,7 @@ object Panels {
         key.background = rounded(C.SURFACE2, 10)
         key.bind(addr) { v ->
             val x = v.asI()
-            key.text = "KEY SOURCE\n" + (if (x == 0) "SELF" else "#$x")
+            key.text = "KEY SOURCE\n" + App.console.keySourceName(x)
         }
         key.layoutParams = lp(dp(150), dp(56)).m(l = dp(16))
         key
@@ -216,7 +216,7 @@ object Panels {
         val main = addCard(root, "GATE")
         val top = row()
         top.addView(onOff("$b/on"), lp(dp(120), dp(52)))
-        top.addView(selector("TIPO", "$b/mode", GATE_MODES), lp(dp(180), dp(52)).m(l = dp(14)))
+        top.addView(selector("TIPO", "$b/mode", App.console.gateModes), lp(dp(180), dp(52)).m(l = dp(14)))
         main.addView(top)
         val mid = row()
         mid.addView(DynGraphView(ctx, p, true), lp(dp(220), dp(190)))

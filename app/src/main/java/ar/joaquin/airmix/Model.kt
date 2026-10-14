@@ -26,6 +26,12 @@ class Console(
     /** Envíos a FX desde el canal (solo X Air: mix/07..10). En X32 los FX se alimentan desde buses. */
     val fxSends: Int get() = if (isX32) 0 else 4
 
+    /** Orden de modos del gate: difiere entre X Air y X32. */
+    val gateModes: List<String> get() = if (isX32) Scenes.X32_GATE_MODES else Scenes.XAIR_GATE_MODES
+
+    fun keySourceName(v: Int): String =
+        if (isX32) (if (v == 0) "SELF" else "#$v") else Scenes.XAIR_KEYSRC.getOrElse(v) { "#$v" }
+
     fun sameShape(o: Console): Boolean =
         family == o.family && channels == o.channels && buses == o.buses &&
             auxIns == o.auxIns && fxReturns == o.fxReturns && matrices == o.matrices && dcas == o.dcas
@@ -35,8 +41,8 @@ class Console(
             val u = m.uppercase(Locale.US)
             return when {
                 u.contains("32") -> Console(Family.X32, m, 32, 8, 8, 16, 6, 8, 32, 8, 6)
-                u.contains("12") -> Console(Family.XAIR, m, 12, 1, 4, 2, 0, 4, 4, 4, 4)
-                u.contains("16") -> Console(Family.XAIR, m, 16, 1, 4, 4, 0, 4, 8, 4, 4)
+                u.contains("12") -> Console(Family.XAIR, m, 12, 1, 4, 2, 0, 4, 12, 4, 4)
+                u.contains("16") -> Console(Family.XAIR, m, 16, 1, 4, 4, 0, 4, 16, 4, 4)
                 else -> Console(Family.XAIR, m, 16, 1, 4, 6, 0, 4, 16, 4, 4) // XR18 / X18 / MR18
             }
         }

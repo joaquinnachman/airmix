@@ -342,7 +342,8 @@ object Scenes {
     private val COLORS = listOf("OFF", "RD", "GN", "YE", "BL", "MG", "CY", "WH", "OFFi", "RDi", "GNi", "YEi", "BLi", "MGi", "CYi", "WHi")
     private val FILTER_TYPES = listOf("LC6", "LC12", "HC6", "HC12", "1.0", "2.0", "3.0", "5.0", "10.0")
     private val RATIOS = listOf("1.1", "1.3", "1.5", "2.0", "2.5", "3.0", "4.0", "5.0", "7.0", "10", "20", "100")
-    private val FX_ABBR = listOf(
+    private val EQ_TYPES = listOf("LCut", "LShv", "PEQ", "VEQ", "HShv", "HCut")
+    val FX_ABBR = listOf(
         "HALL", "AMBI", "RPLT", "ROOM", "CHAM", "PLAT", "VREV", "VRM", "GATE", "RVRS", "DLY", "3TAP", "4TAP",
         "CRS", "FLNG", "PHAS", "DIMC", "FILT", "ROTA", "PAN", "SUB", "D/RV", "CR/R", "FL/R", "D/CR", "D/FL",
         "MODD", "GEQ2", "GEQ", "TEQ2", "TEQ", "DES2", "DES", "P1A", "P1A2", "PQ5", "PQ5S", "WAVD", "LIM",
@@ -350,24 +351,109 @@ object Scenes {
         "IMG", "EDI", "SON", "AMP2", "AMP", "DRV2", "DRV", "PIT2", "PIT"
     )
 
+    // Tablas X Air tomadas de XAirSetScene.h (Maillot / Mitchell), el origen del formato .scn,
+    // vía xair-scene-manager (stblassitude). Confirmadas contra un .scn real de XR18.
+    val XAIR_GATE_MODES = listOf("GATE", "EXP2", "EXP3", "EXP4", "DUCK")
+    val XAIR_KEYSRC: List<String> = listOf("SELF") + (1..16).map { "Ch" + Fmt.two(it) } + (1..6).map { "Bus$it" }
+    private val XAIR_INSRC: List<String> = (1..16).map { "In" + Fmt.two(it) } + listOf("OFF")
+    private val XAIR_CHRTNSRC: List<String> = (1..18).map { "U" + Fmt.two(it) }
+    private val XAIR_RTNRTNSRC = listOf("U0102", "U0304", "U0506", "U0708", "U0910", "U1112", "U1314", "U1516", "U1718")
+    private val XAIR_TAP = listOf("IN", "PREEQ", "POSTEQ", "PRE", "POST", "GRP")
+    private val XAIR_CHFXSLOT = listOf("OFF", "Fx1A", "Fx1B", "Fx2A", "Fx2B", "Fx3A", "Fx3B", "Fx4A", "Fx4B")
+    private val XAIR_LRFXSLOT = listOf("OFF", "Fx1", "Fx2", "Fx3", "Fx4")
+    private val XAIR_EQMODE = listOf("PEQ", "GEQ", "TEQ")
+
+    val X32_GATE_MODES = listOf("EXP2", "EXP3", "EXP4", "GATE", "DUCK")
+
     private val BASES = listOf(
         "rtn/aux", "main/st", "main/m", "ch/#", "rtn/#", "auxin/#", "fxrtn/#", "bus/#", "fxsend/#",
-        "mtx/#", "dca/#", "fx/#", "headamp/#", "lr"
+        "mtx/#", "dca/#", "fx/#", "headamp/#", "lr", "config"
     )
     private val INPUTS = setOf("ch/#", "rtn/#", "rtn/aux", "auxin/#", "fxrtn/#")
 
     fun patternKey(path: String): String =
         path.split('/').joinToString("/") { seg -> if (seg.isNotEmpty() && seg.all { it.isDigit() }) "#" else seg }
 
-    private fun baseFields(key: String): List<Field>? {
+    private val EQ_BAND = listOf(
+        Field("type", 'E', list = EQ_TYPES),
+        Field("f", 'G', 20f, 20000f), Field("g", 'L', -15f, 15f), Field("q", 'G', 10f, 0.3f)
+    )
+
+    private fun filterFields() = listOf(Field("on", 'B'), Field("type", 'E', list = FILTER_TYPES), Field("f", 'G', 20f, 20000f))
+
+    /** Campos de un patrón de bloque. null = no soportado (se informa al cargar). */
+    fun fieldsFor(key: String): List<Field>? {
         val base = BASES.firstOrNull { key == it || key.startsWith("$it/") } ?: return null
         val rest = key.removePrefix(base).trimStart('/')
-        val x32 = App.console.isX32
+        return if (App.console.isX32) x32Fields(base, rest) else xairFields(base, rest)
+    }
+
+    private fun xairFields(base: String, rest: String): List<Field>? {
+        val input = base in INPUTS
+        return when (rest) {
+            "config" -> when (base) {
+                "ch/#" -> listOf(
+                    Field("name", 'S'), Field("color", 'I'),
+                    Field("insrc", 'E', list = XAIR_INSRC), Field("rtnsrc", 'E', list = XAIR_CHRTNSRC)
+                )
+                "rtn/#" -> listOf(Field("name", 'S'), Field("color", 'I'), Field("rtnsrc", 'E', list = XAIR_RTNRTNSRC))
+                "rtn/aux" -> listOf(Field("name", 'S'), Field("color", 'I'), Field("rtnsrc", 'E', list = listOf("U1718")))
+                "config" -> null
+                else -> listOf(Field("name", 'S'), Field("color", 'I'))
+            }
+            "mute" -> if (base == "config") (1..4).map { Field("$it", 'B') } else null
+            "preamp" -> if (base == "ch/#") listOf(
+                Field("rtntrim", 'L', -18f, 18f), Field("rtnsw", 'B'), Field("invert", 'B'),
+                Field("hpon", 'B'), Field("hpf", 'G', 20f, 400f)
+            ) else listOf(Field("rtntrim", 'L', -18f, 18f), Field("rtnsw", 'B'))
+            "gate" -> listOf(
+                Field("on", 'B'), Field("mode", 'E', list = XAIR_GATE_MODES),
+                Field("thr", 'L', -80f, 0f), Field("range", 'L', 3f, 60f), Field("attack", 'L', 0f, 120f),
+                Field("hold", 'G', 0.02f, 2000f), Field("release", 'G', 5f, 4000f),
+                Field("keysrc", 'E', list = XAIR_KEYSRC)
+            )
+            "gate/filter", "dyn/filter" -> filterFields()
+            "dyn" -> {
+                val l = arrayListOf(
+                    Field("on", 'B'), Field("mode", 'E', list = listOf("COMP", "EXP")),
+                    Field("det", 'E', list = listOf("PEAK", "RMS")), Field("env", 'E', list = listOf("LIN", "LOG")),
+                    Field("thr", 'L', -60f, 0f), Field("ratio", 'E', list = RATIOS), Field("knee", 'L', 0f, 5f),
+                    Field("mgain", 'L', 0f, 24f), Field("attack", 'L', 0f, 120f), Field("hold", 'G', 0.02f, 2000f),
+                    Field("release", 'G', 5f, 4000f), Field("mix", 'L', 0f, 100f)
+                )
+                if (base != "lr") l.add(Field("keysrc", 'E', list = XAIR_KEYSRC))
+                l.add(Field("auto", 'B'))
+                l
+            }
+            "insert" -> listOf(Field("on", 'B'), Field("fxslot", 'E', list = if (base == "lr") XAIR_LRFXSLOT else XAIR_CHFXSLOT))
+            "eq" -> if (input) listOf(Field("on", 'B')) else listOf(Field("on", 'B'), Field("mode", 'E', list = XAIR_EQMODE))
+            "eq/#" -> EQ_BAND
+            "mix" -> when {
+                input || base == "bus/#" -> listOf(Field("on", 'B'), Field("fader", 'V'), Field("lr", 'B'), Field("pan", 'P'))
+                base == "lr" -> listOf(Field("on", 'B'), Field("fader", 'V'), Field("pan", 'P'))
+                else -> listOf(Field("on", 'B'), Field("fader", 'V'))
+            }
+            "mix/#" -> listOf(Field("level", 'V'), Field("grpon", 'B'), Field("tap", 'E', list = XAIR_TAP), Field("pan", 'P'))
+            "grp" -> listOf(Field("dca", 'M'), Field("mute", 'M'))
+            "automix" -> listOf(Field("group", 'E', list = listOf("OFF", "X", "Y")), Field("weight", 'L', -12f, 12f))
+            "" -> when (base) {
+                "dca/#" -> listOf(Field("on", 'B'), Field("fader", 'V'))
+                "fx/#" -> listOf(Field("type", 'E', list = FX_ABBR), Field("insert", 'B'))
+                "headamp/#" -> listOf(Field("gain", 'L', -12f, 60f), Field("phantom", 'B'))
+                else -> null
+            }
+            else -> null
+        }
+    }
+
+    /** X32: formato aproximado; la verificación previa descarta lo que no coincida. */
+    private fun x32Fields(base: String, rest: String): List<Field>? {
         val input = base in INPUTS
         return when (rest) {
             "config" -> {
+                if (base == "config") return null
                 val l = arrayListOf(Field("name", 'S'), Field("icon", 'I'), Field("color", 'E', list = COLORS))
-                if (base == "ch/#") l.add(Field(if (x32) "source" else "insrc", 'I'))
+                if (base == "ch/#" || base == "auxin/#") l.add(Field("source", 'I'))
                 l
             }
             "preamp" -> listOf(
@@ -375,13 +461,11 @@ object Scenes {
                 Field("hpslope", 'E', list = listOf("12", "18", "24")), Field("hpf", 'G', 20f, 400f)
             )
             "gate" -> listOf(
-                Field("on", 'B'), Field("mode", 'E', list = listOf("EXP2", "EXP3", "EXP4", "GATE", "DUCK")),
+                Field("on", 'B'), Field("mode", 'E', list = X32_GATE_MODES),
                 Field("thr", 'L', -80f, 0f), Field("range", 'L', 3f, 60f), Field("attack", 'L', 0f, 120f),
                 Field("hold", 'G', 0.02f, 2000f), Field("release", 'G', 5f, 4000f), Field("keysrc", 'I')
             )
-            "gate/filter", "dyn/filter" -> listOf(
-                Field("on", 'B'), Field("type", 'E', list = FILTER_TYPES), Field("f", 'G', 20f, 20000f)
-            )
+            "gate/filter", "dyn/filter" -> filterFields()
             "dyn" -> listOf(
                 Field("on", 'B'), Field("mode", 'E', list = listOf("COMP", "EXP")),
                 Field("det", 'E', list = listOf("PEAK", "RMS")), Field("env", 'E', list = listOf("LIN", "LOG")),
@@ -391,11 +475,10 @@ object Scenes {
                 Field("keysrc", 'I'), Field("mix", 'L', 0f, 100f), Field("auto", 'B')
             )
             "eq" -> listOf(Field("on", 'B'))
-            "eq/#" -> null // se resuelve abajo (necesita el número de banda en la dirección)
-            "mix" -> if (input) listOf(
-                Field("on", 'B'), Field("fader", 'V'), Field(if (x32) "st" else "lr", 'B'), Field("pan", 'P')
-            ) else listOf(Field("on", 'B'), Field("fader", 'V'))
-            "mix/#" -> null
+            "eq/#" -> EQ_BAND
+            "mix" -> if (input) listOf(Field("on", 'B'), Field("fader", 'V'), Field("st", 'B'), Field("pan", 'P'))
+            else listOf(Field("on", 'B'), Field("fader", 'V'))
+            "mix/#" -> listOf(Field("on", 'B'), Field("level", 'V'), Field("pan", 'P'))
             "grp" -> listOf(Field("dca", 'M'), Field("mute", 'M'))
             "" -> when (base) {
                 "dca/#" -> listOf(Field("on", 'B'), Field("fader", 'V'))
@@ -407,36 +490,13 @@ object Scenes {
         }
     }
 
-    // Las bandas de EQ y los envíos tienen el número en la ruta: "ch/01/eq/2" -> campos "type","f"...
-    // Para eso el patrón "eq/#" se mapea con sub relativos al propio bloque.
-    private val EQ_BAND = listOf(
-        Field("type", 'E', list = listOf("LCut", "LShv", "PEQ", "VEQ", "HShv", "HCut")),
-        Field("f", 'G', 20f, 20000f), Field("g", 'L', -15f, 15f), Field("q", 'G', 10f, 0.3f)
-    )
-
-    private fun sendFields(): List<Field> =
-        if (App.console.isX32) listOf(Field("on", 'B'), Field("level", 'V'), Field("pan", 'P'))
-        else listOf(Field("level", 'V'), Field("pan", 'P'))
-
-    /** Campos de un patrón de bloque (incluye bandas de EQ y envíos). null = no soportado. */
-    fun fieldsFor(key: String): List<Field>? {
-        baseFields(key)?.let { return it }
-        val base = BASES.firstOrNull { key.startsWith("$it/") } ?: return null
-        val rest = key.removePrefix(base).trimStart('/')
-        return when (rest) {
-            "eq/#" -> EQ_BAND
-            "mix/#" -> sendFields()
-            else -> null
-        }
-    }
-
     // ------------------------------------------------------------------ conversión texto -> valor OSC
 
     fun convert(f: Field, tok: String): Any? {
         val t = tok.trim()
         return when (f.type) {
             'S' -> t
-            'I' -> t.toIntOrNull()
+            'I' -> t.toIntOrNull() ?: t.toFloatOrNull()?.let { Math.round(it) }
             'B' -> when (t.uppercase(Locale.US)) { "ON" -> 1; "OFF" -> 0; else -> null }
             'E' -> {
                 val l = f.list ?: return null
@@ -447,7 +507,7 @@ object Scenes {
             'G' -> num(t)?.let { Fmt.logInv(f.a, f.b, it).coerceIn(0f, 1f) }
             'V' -> if (t == "-oo") 0f else num(t)?.let { Fmt.dbToFader(it).coerceIn(0f, 1f) }
             'P' -> num(t)?.let { ((it + 100f) / 200f).coerceIn(0f, 1f) }
-            'M' -> if (t.startsWith("%")) t.substring(1).toIntOrNull(2) else null
+            'M' -> if (t.startsWith("%")) (if (t.length == 1) 0 else t.substring(1).toIntOrNull(2)) else null
             else -> null
         }
     }
