@@ -8,26 +8,22 @@ object App {
     val store = Store()
     var client: MixerClient? = null
 
-    var model = "XR12"
+    /** Perfil de la consola. Arranca con el último modelo usado (o XR12) hasta que la consola responde /xinfo. */
+    var console: Console = Console.fromModel("XR12")
+        private set
     var firmware = ""
     var mixerName = ""
-    var channels = 12
-    var buses = 2
-    var headamps = 4
 
     /** Vistas de medidores visibles: se redibujan desde un único tick. */
     val meterViews = HashSet<View>()
 
-    /** Devuelve true si cambió la cantidad de canales/buses. */
+    /** Devuelve true si cambió la forma de la consola (canales, buses, familia). */
     fun applyModel(m: String): Boolean {
-        val before = Triple(channels, buses, headamps)
-        model = m
-        when {
-            m.contains("12") -> { channels = 12; buses = 2; headamps = 4 }
-            m.contains("16") -> { channels = 16; buses = 4; headamps = 8 }
-            else -> { channels = 16; buses = 6; headamps = 16 }
-        }
-        return before != Triple(channels, buses, headamps)
+        val n = Console.fromModel(m)
+        val changed = !n.sameShape(console)
+        console = n
+        client?.x32 = n.isX32
+        return changed
     }
 }
 

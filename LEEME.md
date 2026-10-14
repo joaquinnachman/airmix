@@ -1,4 +1,12 @@
-# AirMix — control liviano para Behringer XR12 (y X Air en general)
+# AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
+
+## Novedades 0.2
+- **Multi-consola.** XR12, XR16, XR18/X18/MR18 y X32/M32. La app detecta el modelo y el puerto sola (X Air usa 10024, X32 usa 10023) y arma las capas, buses, matrices, DCAs y envíos que correspondan.
+- **MUTE FX** en el riel izquierdo, siempre a mano: mutea todos los efectos de un toque para hablar entre tema y tema, y al volver a tocarlo restaura solo los que estaban abiertos.
+  - En X Air mutea los FX SEND masters, así las colas de reverb se apagan naturales.
+  - En X32 mutea los FX returns.
+- **Diseño propio.** Paleta grafito y coral, tiras más limpias, fader con escala en dB, perillas tipo anillo y detalle de canal con pestañas arriba.
+
 
 App Android nativa en Kotlin, con la distribución de pantallas de MX-MIX, hecha desde cero.
 No usa código ni gráficos de Behringer. Habla directo con la consola por OSC, puerto UDP 10024.

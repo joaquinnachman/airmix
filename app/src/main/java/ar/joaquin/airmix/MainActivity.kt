@@ -16,29 +16,26 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupWindow
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
 class MainActivity : Activity() {
-    enum class Tab(val label: String) {
-        HOME("HOME"), EFFECTS("EFFECTS"), METERS("METERS"), RECORDER("RECORDER"), ROUTING("ROUTING")
-    }
+    enum class Tab(val label: String) { MIX("MEZCLA"), FX("EFECTOS"), METERS("MEDIDORES") }
 
-    enum class Layer { CH1, CH2, AUX, RTN, BUS, DCA }
-
-    private var tab = Tab.HOME
-    private var layer = Layer.CH1
+    private var tab = Tab.MIX
+    private var layers: List<Layer> = emptyList()
+    private var layerIdx = 0
     private var sends = SendTarget.MAIN
     private var detail: Strip? = null
     private var section = Section.CONFIG
 
     private lateinit var content: FrameLayout
-    private lateinit var nav: LinearLayout
+    private lateinit var rail: LinearLayout
     private lateinit var modelLabel: TextView
-    private lateinit var fwLabel: TextView
-    private lateinit var wifi: WifiIcon
+    private lateinit var conn: Btn
     private val tabBtns = HashMap<Tab, Btn>()
-    private val layerBtns = HashMap<Layer, Btn>()
+    private val layerBtns = ArrayList<Btn>()
 
     private val handler = Handler(Looper.getMainLooper())
     private var connected = false
@@ -57,11 +54,15 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        prefs().getString("model", null)?.let { App.applyModel(it) }
         if (App.client == null) App.client = MixerClient(applicationContext).also { it.start() }
+        App.client?.x32 = App.console.isX32
         setContentView(buildRoot())
+        rebuildRail()
         render()
         val ip = prefs().getString("ip", null)
-        if (ip != null) App.client?.connect(ip) else handler.postDelayed({ showConnect() }, 400)
+        if (ip != null) App.client?.connect(ip, prefs().getInt("port", 0))
+        else handler.postDelayed({ showConnect() }, 400)
     }
 
     override fun onResume() {
@@ -135,8 +136,9 @@ class MainActivity : Activity() {
         val isConn = c.isConnected()
         if (isConn != connected) {
             connected = isConn
-            wifi.ok = isConn
+            updateConn()
             if (isConn) {
+                if (c.port != 0) prefs().edit().putInt("port", c.port).apply()
                 App.store.requeryObserved()
             } else {
                 java.util.Arrays.fill(c.meters, -100f)
@@ -149,13 +151,30 @@ class MainActivity : Activity() {
     private fun onXinfo(name: String, model: String, fw: String) {
         App.mixerName = name
         App.firmware = fw
+        prefs().edit().putString("model", model).apply()
         val changed = App.applyModel(model)
-        modelLabel.text = model
-        fwLabel.text = fw
-        if (changed) render()
+        modelLabel.text = "$model  ·  $fw"
+        updateConn()
+        if (changed) {
+            sends = SendTarget.MAIN
+            detail = null
+            rebuildRail()
+            render()
+        }
     }
 
-    // ------------------------------------------------------------------ layout
+    private fun updateConn() {
+        val ip = App.client?.host?.hostAddress ?: ""
+        if (connected) {
+            conn.text = "●  ${App.console.model}  $ip"
+            conn.setTextColor(C.GREEN)
+        } else {
+            conn.text = "●  SIN CONEXIÓN"
+            conn.setTextColor(C.RED)
+        }
+    }
+
+    // ------------------------------------------------------------------ layout base
 
     private fun buildRoot(): View {
         val root = col()
@@ -163,90 +182,100 @@ class MainActivity : Activity() {
 
         val top = row()
         top.setBackgroundColor(C.TOP)
-        val logo = col()
-        logo.gravity = Gravity.CENTER
-        modelLabel = label(App.model, 26f)
-        fwLabel = label("", 12f, C.TEXT_DIM)
-        logo.addView(modelLabel)
-        logo.addView(fwLabel)
-        top.addView(logo, lp(dp(110), MATCH))
+        top.setPadding(dp(16), 0, dp(12), 0)
+        val logo = label("AIRMIX", 22f, C.ACCENT, Gravity.START or Gravity.CENTER_VERTICAL)
+        logo.letterSpacing = 0.15f
+        top.addView(logo, lp(WRAP, MATCH))
+        modelLabel = label(App.console.model, 13f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL)
+        top.addView(modelLabel, lp(dp(150), MATCH).m(l = dp(14)))
         for (t in Tab.values()) {
-            val b = Btn(this, t.label, BtnStyle.TAB, 15f)
+            val b = Btn(this, t.label, BtnStyle.TAB, 16f)
             b.setOnClickListener {
                 tab = t
                 render()
             }
             tabBtns[t] = b
-            top.addView(b, lp(0, dp(46), 1f).m(dp(8), 0, dp(8), 0))
+            top.addView(b, lp(dp(130), dp(40)).m(r = dp(8)))
         }
-        wifi = WifiIcon(this)
-        wifi.setOnClickListener { showConnect() }
-        top.addView(wifi, lp(dp(64), MATCH))
-        root.addView(top, lp(MATCH, dp(64)))
+        top.addView(View(this), lp(0, 1, 1f))
+        conn = Btn(this, "", BtnStyle.OUTLINE, 14f)
+        conn.setOnClickListener { showConnect() }
+        top.addView(conn, lp(dp(240), dp(40)))
+        root.addView(top, lp(MATCH, dp(60)))
+        updateConn()
 
         val body = row()
         body.gravity = Gravity.TOP
-        nav = col()
-        nav.setBackgroundColor(C.NAV_BG)
-        for (l in Layer.values()) {
-            val b = Btn(this, "", BtnStyle.NAV, 15f)
-            b.setOnClickListener {
-                layer = l
-                detail = null
-                render()
-            }
-            layerBtns[l] = b
-            nav.addView(b, lp(MATCH, dp(54)).m(dp(10), dp(9), dp(10), dp(9)))
-        }
-        nav.addView(View(this), lp(MATCH, 0, 1f))
-        val clr = Btn(this, "CLR SOLO", BtnStyle.NAV, 14f)
-        clr.setOnClickListener { for (i in 1..36) App.store.set("/-stat/solosw/${Fmt.two(i)}", 0) }
-        nav.addView(clr, lp(MATCH, dp(48)).m(dp(10), dp(8), dp(10), dp(16)))
-        body.addView(nav, lp(dp(104), MATCH))
-
+        rail = col()
+        rail.setBackgroundColor(C.NAV_BG)
+        body.addView(rail, lp(dp(116), MATCH))
         content = FrameLayout(this)
         body.addView(content, lp(0, MATCH, 1f))
         root.addView(body, lp(MATCH, 0, 1f))
         return root
     }
 
+    /** Riel izquierdo: capas (con scroll si son muchas, ej. X32) + MUTE FX + CLR SOLO siempre a mano. */
+    private fun rebuildRail() {
+        layers = buildLayers()
+        if (layerIdx >= layers.size) layerIdx = 0
+        rail.removeAllViews()
+        layerBtns.clear()
+
+        val list = col()
+        list.setPadding(dp(10), dp(8), dp(10), dp(8))
+        layers.forEachIndexed { i, l ->
+            val b = Btn(this, l.label, BtnStyle.NAV, 15f)
+            b.setOnClickListener {
+                layerIdx = i
+                tab = Tab.MIX
+                detail = null
+                render()
+            }
+            layerBtns.add(b)
+            list.addView(b, lp(MATCH, dp(50)).m(b = dp(6)))
+        }
+        val sv = ScrollView(this)
+        sv.isVerticalScrollBarEnabled = false
+        sv.addView(list, FrameLayout.LayoutParams(MATCH, WRAP))
+        rail.addView(sv, lp(MATCH, 0, 1f))
+
+        val fx = Btn(this, "MUTE\nFX", BtnStyle.MUTE, 17f)
+        fx.maxLines = 2
+        fx.activeColor = C.MUTE
+        val refresh: (Any) -> Unit = {
+            val all = FxMute.allMuted()
+            fx.active = all
+            fx.text = if (all) "FX\nMUTEADOS" else "MUTE\nFX"
+        }
+        for (a in FxMute.targets()) fx.bind(a, refresh)
+        fx.setOnClickListener {
+            FxMute.toggle()
+            refresh(0)
+        }
+        rail.addView(fx, lp(MATCH, dp(78)).m(dp(10), dp(8), dp(10), dp(8)))
+
+        val clr = Btn(this, "CLR SOLO", BtnStyle.OUTLINE, 14f)
+        clr.setOnClickListener {
+            val n = if (App.console.isX32) 80 else 36
+            for (i in 1..n) App.store.set("/-stat/solosw/${Fmt.two(i)}", 0)
+        }
+        rail.addView(clr, lp(MATCH, dp(44)).m(dp(10), 0, dp(10), dp(14)))
+    }
+
     private fun render() {
         content.removeAllViews()
-        if (layer == Layer.CH2 && App.channels <= 8) layer = Layer.CH1
-        nav.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
         for ((t, b) in tabBtns) b.active = t == tab
-        for ((l, b) in layerBtns) {
-            b.active = l == layer
-            b.text = when (l) {
-                Layer.CH1 -> "CH 1-8"
-                Layer.CH2 -> "CH 9-${App.channels}"
-                Layer.AUX -> "AUX"
-                Layer.RTN -> "FX RETURN"
-                Layer.BUS -> "BUS"
-                Layer.DCA -> "DCA"
-            }
-            b.visibility = if (l == Layer.CH2 && App.channels <= 8) View.GONE else View.VISIBLE
-        }
+        for (i in layerBtns.indices) layerBtns[i].active = tab == Tab.MIX && i == layerIdx
         val v: View = when (tab) {
-            Tab.HOME -> {
+            Tab.MIX -> {
                 val d = detail
                 if (d != null) buildDetail(d) else buildHome()
             }
-            Tab.EFFECTS -> Panels.effects(this)
+            Tab.FX -> Panels.effects(this)
             Tab.METERS -> AllMetersView(this).also { it.setBackgroundColor(C.BG) }
-            Tab.RECORDER -> Panels.placeholder(this, "RECORDER")
-            Tab.ROUTING -> Panels.placeholder(this, "ROUTING")
         }
         content.addView(v, FrameLayout.LayoutParams(MATCH, MATCH))
-    }
-
-    private fun stripsFor(l: Layer): List<Strip> = when (l) {
-        Layer.CH1 -> (1..minOf(8, App.channels)).map { Strip(Kind.CH, it) }
-        Layer.CH2 -> (9..App.channels).map { Strip(Kind.CH, it) }
-        Layer.AUX -> listOf(Strip(Kind.AUX))
-        Layer.RTN -> stripsOfKind(Kind.RTN)
-        Layer.BUS -> stripsOfKind(Kind.BUS)
-        Layer.DCA -> stripsOfKind(Kind.DCA)
     }
 
     private fun openDetail(s: Strip) {
@@ -254,52 +283,70 @@ class MainActivity : Activity() {
         render()
     }
 
-    // ------------------------------------------------------------------ HOME
+    // ------------------------------------------------------------------ MEZCLA
 
     private fun buildHome(): View {
         val root = col()
         root.setBackgroundColor(C.BG)
         val sendsMode = sends != SendTarget.MAIN
+        val layer = layers.getOrNull(layerIdx)
 
         val header = row()
-        header.setBackgroundColor(if (sendsMode) C.HEADER_SENDS else C.HEADER)
-        header.addView(label(if (sendsMode) sends.title else "", 38f, Color.BLACK), lp(0, MATCH, 1f))
-        val sel = Btn(this, "SENDS TO  ⋮\n${sends.label}", BtnStyle.NAV, 16f)
-        sel.maxLines = 2
-        sel.gravity = Gravity.CENTER_VERTICAL or Gravity.START
-        sel.setPadding(dp(12), 0, dp(12), 0)
-        sel.setTextColor(Color.WHITE)
-        sel.setOnClickListener { showSendsPopup(sel) }
-        header.addView(sel, lp(dp(180), MATCH).m(dp(6), dp(6), dp(6), dp(6)))
-        root.addView(header, lp(MATCH, dp(72)))
+        header.setPadding(dp(16), 0, dp(10), 0)
+        if (sendsMode) {
+            header.background = rounded(C.SENDS, 0)
+            header.addView(
+                label("SENDS ON FADER  →  ${sends.label}", 20f, C.INK, Gravity.START or Gravity.CENTER_VERTICAL),
+                lp(0, MATCH, 1f)
+            )
+            val change = Btn(this, "CAMBIAR ▾", BtnStyle.LIGHT, 15f)
+            change.setOnClickListener { showSendsPopup(change) }
+            header.addView(change, lp(dp(130), dp(40)).m(r = dp(8)))
+            val exit = Btn(this, "SALIR ✕", BtnStyle.LIGHT, 15f)
+            exit.setOnClickListener {
+                sends = SendTarget.MAIN
+                render()
+            }
+            header.addView(exit, lp(dp(110), dp(40)))
+        } else {
+            header.setBackgroundColor(C.PANEL)
+            header.addView(
+                label(layer?.label ?: "", 20f, C.TEXT, Gravity.START or Gravity.CENTER_VERTICAL),
+                lp(0, MATCH, 1f)
+            )
+            val sel = Btn(this, "SENDS ON FADER ▾", BtnStyle.OUTLINE, 15f)
+            sel.setOnClickListener { showSendsPopup(sel) }
+            header.addView(sel, lp(dp(190), dp(40)))
+        }
+        root.addView(header, lp(MATCH, dp(56)))
 
         val strips = row()
         strips.gravity = Gravity.TOP
-        val list = stripsFor(layer)
+        strips.setPadding(dp(4), dp(4), dp(4), dp(4))
+        val list = layer?.strips ?: emptyList()
         for (i in 0 until 8) {
-            val bg = if (i % 2 == 0) C.STRIP_A else C.STRIP_B
-            val v = if (i < list.size) stripView(list[i], sends, bg) { openDetail(it) }
-            else View(this).also { it.setBackgroundColor(C.BG) }
-            strips.addView(v, lp(0, MATCH, 1f))
+            val v = if (i < list.size) stripView(list[i], sends) { openDetail(it) } else View(this)
+            strips.addView(v, lp(0, MATCH, 1f).m(dp(2), 0, dp(2), 0))
         }
         val master = when {
             sends.bus > 0 -> Strip(Kind.BUS, sends.bus)
             sends.fx > 0 -> Strip(Kind.FXSEND, sends.fx)
             else -> Strip(Kind.LR)
         }
-        strips.addView(stripView(master, SendTarget.MAIN, C.STRIP_B) { openDetail(it) }, lp(0, MATCH, 1f))
+        strips.addView(stripView(master, SendTarget.MAIN) { openDetail(it) }, lp(0, MATCH, 1f).m(dp(10), 0, dp(2), 0))
         root.addView(strips, lp(MATCH, 0, 1f))
         return root
     }
 
     private fun showSendsPopup(anchor: View) {
         val box = col()
-        box.setBackgroundColor(Color.BLACK)
-        box.setPadding(dp(2), dp(2), dp(2), dp(2))
-        val pw = PopupWindow(box, dp(380), WRAP, true)
-        pw.setBackgroundDrawable(ColorDrawable(Color.BLACK))
-        val cell = { t: SendTarget ->
-            val b = Btn(this, t.title, BtnStyle.NAV, 22f)
+        box.background = rounded(C.SURFACE, 14, C.LINE)
+        box.setPadding(dp(8), dp(8), dp(8), dp(8))
+        val pw = PopupWindow(box, dp(400), WRAP, true)
+        pw.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        val cell = { t: SendTarget, label: String ->
+            val b = Btn(this, label, BtnStyle.LIGHT, 18f)
+            b.activeColor = if (t.fx > 0) C.ACCENT else C.SENDS
             b.active = t == sends
             b.setOnClickListener {
                 sends = t
@@ -308,14 +355,17 @@ class MainActivity : Activity() {
             }
             b
         }
-        box.addView(cell(SendTarget.MAIN), lp(MATCH, dp(58)).m(dp(2), dp(2), dp(2), dp(2)))
-        val targets = (1..App.buses).map { SendTarget(bus = it) } + (1..4).map { SendTarget(fx = it) }
-        for (pair in targets.chunked(2)) {
+        box.addView(cell(SendTarget.MAIN, "MAIN (normal)"), lp(MATCH, dp(52)).m(b = dp(6)))
+        val targets = ArrayList<Pair<SendTarget, String>>()
+        for (i in 1..App.console.buses) targets.add(SendTarget(bus = i) to "BUS $i")
+        for (i in 1..App.console.fxSends) targets.add(SendTarget(fx = i) to "FX $i")
+        for (chunk in targets.chunked(4)) {
             val r = row()
-            for (t in pair) r.addView(cell(t), lp(0, dp(58), 1f).m(dp(2), dp(2), dp(2), dp(2)))
+            for ((t, l) in chunk) r.addView(cell(t, l), lp(0, dp(52), 1f).m(dp(3), dp(3), dp(3), dp(3)))
+            for (k in chunk.size until 4) r.addView(View(this), lp(0, dp(52), 1f).m(dp(3), dp(3), dp(3), dp(3)))
             box.addView(r)
         }
-        pw.showAsDropDown(anchor, 0, 0, Gravity.END)
+        pw.showAsDropDown(anchor, 0, dp(6), Gravity.END)
     }
 
     // ------------------------------------------------------------------ DETALLE
@@ -324,44 +374,26 @@ class MainActivity : Activity() {
         val secs = sectionsFor(s)
         if (section !in secs) section = secs.first()
 
-        val root = row()
-        root.gravity = Gravity.TOP
+        val root = col()
         root.setBackgroundColor(C.BG)
-        root.addView(stripView(s, SendTarget.MAIN, C.STRIP_A) {}, lp(0, MATCH, 1f))
 
-        val right = col()
         val bar = row()
-        bar.setBackgroundColor(Color.BLACK)
-        bar.addView(View(this), lp(0, 1, 1f))
-        val prev = label("‹", 46f)
-        prev.setOnClickListener { step(s, -1) }
-        bar.addView(prev, lp(dp(70), MATCH))
-        bar.addView(label("${s.title.uppercase()} - ${section.label}", 30f), lp(WRAP, MATCH))
-        val next = label("›", 46f)
-        next.setOnClickListener { step(s, 1) }
-        bar.addView(next, lp(dp(70), MATCH))
-        bar.addView(View(this), lp(0, 1, 1f))
-        val done = label("DONE  ✓", 28f)
-        done.setOnClickListener {
+        bar.setBackgroundColor(C.PANEL)
+        bar.setPadding(dp(10), 0, dp(10), 0)
+        val back = Btn(this, "‹  VOLVER", BtnStyle.OUTLINE, 16f)
+        back.setOnClickListener {
             detail = null
             render()
         }
-        bar.addView(done, lp(dp(170), MATCH))
-        right.addView(bar, lp(MATCH, dp(64)))
-
-        val body = row()
-        body.gravity = Gravity.TOP
-        val panel = FrameLayout(this)
-        panel.setBackgroundColor(C.PANEL)
-        panel.addView(Panels.build(this, s, section), FrameLayout.LayoutParams(MATCH, MATCH))
-        body.addView(panel, lp(0, MATCH, 1f))
-
-        val side = col()
-        side.setBackgroundColor(Color.BLACK)
-        side.setPadding(dp(8), dp(8), dp(8), dp(8))
+        bar.addView(back, lp(dp(120), dp(42)))
+        val title = label(s.title, 22f, C.TEXT, Gravity.START or Gravity.CENTER_VERTICAL)
+        title.bind(s.nameAddr) { v ->
+            val n = v.toString()
+            title.text = if (n.isEmpty()) s.title else "${s.title}  ·  $n"
+        }
+        bar.addView(title, lp(dp(300), MATCH).m(l = dp(16)))
         for (sec in secs) {
-            val b = Btn(this, sec.label, BtnStyle.LIGHT, 20f)
-            b.maxLines = 2
+            val b = Btn(this, sec.label, BtnStyle.TAB, 16f)
             b.active = sec == section
             val onAddr = when (sec) {
                 Section.GATE -> "${s.prefix}/gate/on"
@@ -369,16 +401,31 @@ class MainActivity : Activity() {
                 Section.EQ -> "${s.prefix}/eq/on"
                 else -> null
             }
-            if (onAddr != null) b.bind(onAddr) { v -> b.text = sec.label + "\n" + (if (v.asI() != 0) "ON" else "OFF") }
+            if (onAddr != null) b.bind(onAddr) { v -> b.text = (if (v.asI() != 0) "● " else "") + sec.label }
             b.setOnClickListener {
                 section = sec
                 render()
             }
-            side.addView(b, lp(MATCH, dp(96)).m(0, dp(6), 0, dp(6)))
+            bar.addView(b, lp(dp(110), dp(42)).m(r = dp(6)))
         }
-        body.addView(side, lp(dp(132), MATCH))
-        right.addView(body, lp(MATCH, 0, 1f))
-        root.addView(right, lp(0, MATCH, 8f))
+        bar.addView(View(this), lp(0, 1, 1f))
+        val prev = Btn(this, "‹", BtnStyle.OUTLINE, 24f)
+        prev.setOnClickListener { step(s, -1) }
+        bar.addView(prev, lp(dp(54), dp(42)).m(r = dp(6)))
+        val next = Btn(this, "›", BtnStyle.OUTLINE, 24f)
+        next.setOnClickListener { step(s, 1) }
+        bar.addView(next, lp(dp(54), dp(42)))
+        root.addView(bar, lp(MATCH, dp(60)))
+
+        val body = row()
+        body.gravity = Gravity.TOP
+        body.setPadding(dp(4), dp(4), dp(4), dp(4))
+        body.addView(stripView(s, SendTarget.MAIN) {}, lp(0, MATCH, 1f).m(r = dp(4)))
+        val panel = FrameLayout(this)
+        panel.background = rounded(C.PANEL, 14)
+        panel.addView(Panels.build(this, s, section), FrameLayout.LayoutParams(MATCH, MATCH))
+        body.addView(panel, lp(0, MATCH, 8f))
+        root.addView(body, lp(MATCH, 0, 1f))
         return root
     }
 
@@ -400,7 +447,7 @@ class MainActivity : Activity() {
         val list = col()
         list.addView(label("Buscando…", 16f, C.TEXT_DIM, Gravity.START), lp(MATCH, dp(40)))
         box.addView(list, lp(MATCH, WRAP))
-        box.addView(label("O escribí la IP de la consola:", 16f, C.TEXT_DIM, Gravity.START), lp(MATCH, dp(30)).m(t = dp(16)))
+        box.addView(label("O escribí la IP de la consola (XR12 / XR16 / XR18 / X32):", 16f, C.TEXT_DIM, Gravity.START), lp(MATCH, dp(30)).m(t = dp(16)))
         val ip = EditText(this)
         ip.setText(prefs().getString("ip", "192.168.1.1"))
         ip.setTextColor(Color.WHITE)
@@ -413,7 +460,7 @@ class MainActivity : Activity() {
         dialog = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle("Conectar a la consola")
             .setView(box)
-            .setPositiveButton("Conectar") { _, _ -> connectTo(ip.text.toString()) }
+            .setPositiveButton("Conectar") { _, _ -> connectTo(ip.text.toString(), 0) }
             .setNegativeButton("Cancelar", null)
             .setOnDismissListener {
                 dialog = null
@@ -429,22 +476,25 @@ class MainActivity : Activity() {
         val list = dialogList ?: return
         if (!seen.add(d.ip)) return
         if (seen.size == 1) list.removeAllViews()
-        val b = Btn(this, "${d.model}  ·  ${d.name}  ·  ${d.ip}", BtnStyle.NAV, 18f)
-        b.setTextColor(Color.WHITE)
+        val b = Btn(this, "${d.model}  ·  ${d.name}  ·  ${d.ip}", BtnStyle.LIGHT, 18f)
         b.setOnClickListener {
-            connectTo(d.ip)
+            App.applyModel(d.model)
+            prefs().edit().putString("model", d.model).apply()
+            connectTo(d.ip, d.port)
             dialog?.dismiss()
+            rebuildRail()
+            render()
         }
         list.addView(b, lp(MATCH, dp(54)).m(t = dp(6)))
     }
 
-    private fun connectTo(ip: String) {
+    private fun connectTo(ip: String, port: Int) {
         val c = App.client ?: return
-        if (c.connect(ip)) {
-            prefs().edit().putString("ip", ip.trim()).apply()
+        if (c.connect(ip, port)) {
+            prefs().edit().putString("ip", ip.trim()).putInt("port", port).apply()
             App.store.resetValues()
             connected = false
-            wifi.ok = false
+            updateConn()
             Toast.makeText(this, "Conectando a ${ip.trim()}…", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "IP inválida", Toast.LENGTH_SHORT).show()

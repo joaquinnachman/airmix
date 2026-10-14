@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
-class MixerInfo(val ip: String, val name: String, val model: String, val firmware: String)
+class MixerInfo(val ip: String, val port: Int, val name: String, val model: String, val firmware: String)
 
 /**
  * Conexión UDP con la consola (X Air, puerto 10024).
@@ -25,8 +25,9 @@ class MixerInfo(val ip: String, val name: String, val model: String, val firmwar
  */
 class MixerClient(private val ctx: Context) {
     companion object {
-        const val PORT = 10024
-        const val METER_COUNT = 40
+        const val PORT_XAIR = 10024
+        const val PORT_X32 = 10023
+        const val METER_COUNT = 96
     }
 
     @Volatile private var socket: DatagramSocket? = null
@@ -36,6 +37,11 @@ class MixerClient(private val ctx: Context) {
     @Volatile var lastRx = 0L
         private set
     @Volatile private var lastKeep = 0L
+    /** Puerto de la consola: 10024 (X Air) o 10023 (X32). 0 = todavía no se sabe, se prueban los dos. */
+    @Volatile var port = 0
+        private set
+    /** Formato de medidores: X32 manda floats lineales, X Air int16 en dB*256. */
+    @Volatile var x32 = false
     private var lastReopen = 0L
 
     private val pending = ConcurrentHashMap<String, ByteArray>()
@@ -47,9 +53,11 @@ class MixerClient(private val ctx: Context) {
     val meters = FloatArray(METER_COUNT) { -100f }
 
     private val xremote = Osc.encode("/xremote")
-    private val metersSub = Osc.encode("/meters", "/meters/1")
+    private val metersSubXair = Osc.encode("/meters", "/meters/1")
+    private val metersSubX32a = Osc.encode("/meters", "/meters/0")
+    private val metersSubX32b = Osc.encode("/meters", "/meters/2")
     private val xinfo = Osc.encode("/xinfo")
-    private val meters1 = "/meters/1".toByteArray(Charsets.ISO_8859_1)
+    private val meterPrefix = "/meters/".toByteArray(Charsets.ISO_8859_1)
 
     fun start() {
         if (running) return
@@ -66,9 +74,11 @@ class MixerClient(private val ctx: Context) {
         socket = null
     }
 
-    fun connect(ip: String): Boolean {
+    /** knownPort = 0 si no se sabe (IP escrita a mano): se detecta con la primera respuesta. */
+    fun connect(ip: String, knownPort: Int = 0): Boolean {
         val addr = parseIp(ip) ?: return false
         host = addr
+        port = knownPort
         lastRx = 0L
         lastKeep = 0L
         pending.clear()
@@ -100,7 +110,8 @@ class MixerClient(private val ctx: Context) {
             } catch (_: Exception) {}
             parseIp("192.168.1.1")?.let { targets.add(it) }
             for (t in targets) {
-                try { s.send(DatagramPacket(xinfo, xinfo.size, t, PORT)) } catch (_: Exception) {}
+                try { s.send(DatagramPacket(xinfo, xinfo.size, t, PORT_XAIR)) } catch (_: Exception) {}
+                try { s.send(DatagramPacket(xinfo, xinfo.size, t, PORT_X32)) } catch (_: Exception) {}
             }
         }
     }
@@ -159,13 +170,16 @@ class MixerClient(private val ctx: Context) {
             }
             val len = pkt.length
             val fromHost = pkt.address == host
-            if (fromHost) lastRx = SystemClock.uptimeMillis()
+            if (fromHost) {
+                lastRx = SystemClock.uptimeMillis()
+                if (port == 0) port = pkt.port
+            }
             if (fromHost && parseMeters(buf, len)) continue
             val msg = Osc.decode(buf, len) ?: continue
             if (msg.address == "/xinfo" && msg.args.size >= 4) {
                 discovered.add(
                     MixerInfo(
-                        pkt.address.hostAddress ?: "",
+                        pkt.address.hostAddress ?: "", pkt.port,
                         msg.args[1].toString(), msg.args[2].toString(), msg.args[3].toString()
                     )
                 )
@@ -174,22 +188,45 @@ class MixerClient(private val ctx: Context) {
         }
     }
 
-    /** /meters/1: blob con int32 LE (cantidad) + int16 LE por medidor (dB * 256). Sin asignar memoria. */
+    /**
+     * Medidores, sin asignar memoria.
+     * X Air /meters/1: int32 LE (cantidad) + int16 LE por medidor (dB * 256).
+     * X32 /meters/0: 70 floats LE lineales (32 ch, 8 aux, 8 fx rtn, 16 bus, 6 mtx).
+     * X32 /meters/2: buses/matrices/main; tomamos Main L/R (índices 22/23) y los guardamos en 70/71.
+     */
     private fun parseMeters(b: ByteArray, len: Int): Boolean {
         if (len < 24) return false
-        for (i in meters1.indices) if (b[i] != meters1[i]) return false
+        for (i in meterPrefix.indices) if (b[i] != meterPrefix[i]) return false
         if (b[9] != 0.toByte()) return false
+        val which = b[8].toInt() - '0'.code
         if (b[12] != ','.code.toByte() || b[13] != 'b'.code.toByte()) return true
         val blobLen = ((b[16].toInt() and 0xff) shl 24) or ((b[17].toInt() and 0xff) shl 16) or
             ((b[18].toInt() and 0xff) shl 8) or (b[19].toInt() and 0xff)
-        var p = 24
         val end = minOf(len, 20 + blobLen)
-        var i = 0
-        while (p + 1 < end && i < METER_COUNT) {
-            val v = ((b[p + 1].toInt() shl 8) or (b[p].toInt() and 0xff)).toShort().toInt()
-            meters[i] = v / 256f
-            i++
-            p += 2
+        var p = 24
+        if (!x32) {
+            if (which != 1) return true
+            var i = 0
+            while (p + 1 < end && i < METER_COUNT) {
+                val v = ((b[p + 1].toInt() shl 8) or (b[p].toInt() and 0xff)).toShort().toInt()
+                meters[i] = v / 256f
+                i++
+                p += 2
+            }
+        } else {
+            var i = 0
+            while (p + 3 < end) {
+                val bits = (b[p].toInt() and 0xff) or ((b[p + 1].toInt() and 0xff) shl 8) or
+                    ((b[p + 2].toInt() and 0xff) shl 16) or ((b[p + 3].toInt() and 0xff) shl 24)
+                val v = java.lang.Float.intBitsToFloat(bits)
+                val db = if (v > 0.00001f) (20.0 * Math.log10(v.toDouble())).toFloat() else -100f
+                if (which == 0 && i < 70) meters[i] = db
+                if (which == 2 && i == 22) meters[70] = db
+                if (which == 2 && i == 23) meters[71] = db
+                i++
+                p += 4
+                if (which == 2 && i > 23) break
+            }
         }
         return true
     }
@@ -203,15 +240,25 @@ class MixerClient(private val ctx: Context) {
             } ?: continue
             val bytes = pending.remove(key) ?: continue
             val h = host ?: continue
-            rawSend(bytes, h)
+            sendToMixer(bytes, h)
             if (key.endsWith("?")) SystemClock.sleep(1) // no saturar la consola con pedidos
         }
     }
 
-    private fun rawSend(bytes: ByteArray, to: InetAddress) {
+    private fun rawSend(bytes: ByteArray, to: InetAddress, p: Int) {
         try {
-            socket?.send(DatagramPacket(bytes, bytes.size, to, PORT))
+            socket?.send(DatagramPacket(bytes, bytes.size, to, p))
         } catch (_: Exception) {}
+    }
+
+    /** Si todavía no sabemos el puerto, mandamos a los dos (solo una de las dos consolas existe en esa IP). */
+    private fun sendToMixer(bytes: ByteArray, to: InetAddress) {
+        val p = port
+        if (p != 0) rawSend(bytes, to, p)
+        else {
+            rawSend(bytes, to, PORT_XAIR)
+            rawSend(bytes, to, PORT_X32)
+        }
     }
 
     private fun keepAliveLoop() {
@@ -230,9 +277,14 @@ class MixerClient(private val ctx: Context) {
                 }
                 if (now - lastKeep > (if (alive) 8000 else 1500)) {
                     lastKeep = now
-                    rawSend(xremote, h)
-                    rawSend(metersSub, h)
-                    if (!alive) rawSend(xinfo, h)
+                    sendToMixer(xremote, h)
+                    if (x32) {
+                        sendToMixer(metersSubX32a, h)
+                        sendToMixer(metersSubX32b, h)
+                    } else {
+                        sendToMixer(metersSubXair, h)
+                    }
+                    if (!alive) sendToMixer(xinfo, h)
                 }
             }
             SystemClock.sleep(250)

@@ -4,25 +4,29 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RectF
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 
-// Todas las vistas dibujan con objetos preasignados (nada de "new" dentro de onDraw en lo caliente).
+// Todas las vistas dibujan con objetos preasignados (nada de "new" dentro de onDraw).
 
-/** Fader vertical. Arrastre relativo (no salta al tocar); doble tap = 0 dB. */
+/**
+ * Fader vertical con escala en dB a la izquierda y relleno hasta el cap.
+ * Arrastre relativo (no salta al tocar); doble tap = 0 dB.
+ */
 class FaderView(ctx: Context) : View(ctx) {
     var value = 0f
         private set
-    var trackColor = Color.WHITE
+    var fillColor = C.FILL
     var onUserChange: ((Float) -> Unit)? = null
 
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val r = RectF()
     private var lastY = 0f
-    private val marks = floatArrayOf(10f, 5f, 0f, -5f, -10f, -20f, -30f, -40f, -50f, -60f)
+    private var dragging = false
+    private val marks = floatArrayOf(10f, 5f, 0f, -5f, -10f, -20f, -30f, -40f, -60f)
+    private val markLbl = arrayOf("+10", "+5", "0", "-5", "-10", "-20", "-30", "-40", "-60")
     private val gd = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDoubleTap(e: MotionEvent): Boolean {
             setValue(0.75f)
@@ -39,55 +43,58 @@ class FaderView(ctx: Context) : View(ctx) {
         }
     }
 
-    private fun capH() = dpf(64f)
-    private fun top() = capH() / 2f + dpf(4f)
-    private fun travel() = height - capH() - dpf(8f)
+    private fun capH() = dpf(30f)
+    private fun top() = capH() / 2f + dpf(6f)
+    private fun travel() = height - capH() - dpf(12f)
 
     override fun onDraw(c: Canvas) {
-        val cx = width / 2f
         val top = top()
         val travel = travel()
         val bottom = top + travel
-        val span = minOf(dpf(30f), width / 2f - dpf(4f))
-        p.style = Paint.Style.STROKE
-        p.strokeWidth = dpf(1f)
-        p.color = C.TICK
-        for (i in 0..40) {
-            val y = top + travel * i / 40f
-            c.drawLine(cx - span, y, cx - dpf(7f), y, p)
-            c.drawLine(cx + dpf(7f), y, cx + span, y, p)
-        }
-        p.color = Color.WHITE
-        p.strokeWidth = dpf(2.5f)
-        for (db in marks) {
-            val y = bottom - Fmt.dbToFader(db) * travel
-            c.drawLine(cx - span, y, cx - dpf(7f), y, p)
-            c.drawLine(cx + dpf(7f), y, cx + span, y, p)
-        }
-        p.color = trackColor
-        p.strokeWidth = dpf(3f)
-        c.drawLine(cx, top - dpf(12f), cx, bottom + dpf(12f), p)
+        val cx = width * 0.62f
+        val tw = dpf(6f)
 
-        val y = bottom - value * travel
-        val ch = capH()
-        val hw = dpf(17f)
-        // marco del cap
-        p.strokeWidth = dpf(1.5f)
-        p.color = C.CAP_EDGE
-        r.set(cx - hw - dpf(10f), y - ch / 2f, cx + hw + dpf(10f), y - dpf(2f))
-        c.drawRoundRect(r, dpf(6f), dpf(6f), p)
-        r.set(cx - hw - dpf(10f), y + dpf(2f), cx + hw + dpf(10f), y + ch / 2f)
-        c.drawRoundRect(r, dpf(6f), dpf(6f), p)
-        // cap en dos tonos
+        // escala
         p.style = Paint.Style.FILL
-        p.color = C.CAP_TOP
-        r.set(cx - hw, y - ch / 2f + dpf(4f), cx + hw, y)
-        c.drawRect(r, p)
-        p.color = Color.WHITE
-        r.set(cx - hw, y, cx + hw, y + ch / 2f - dpf(4f))
-        c.drawRect(r, p)
-        p.color = C.CAP_EDGE
-        c.drawRect(cx - hw, y - dpf(1f), cx + hw, y + dpf(1f), p)
+        p.typeface = FONT
+        p.textSize = dpf(10f)
+        p.textAlign = Paint.Align.RIGHT
+        val lx = cx - dpf(18f)
+        for (i in marks.indices) {
+            val y = bottom - Fmt.dbToFader(marks[i]) * travel
+            p.color = if (marks[i] == 0f) C.TEXT else C.TICK
+            c.drawText(markLbl[i], lx, y + dpf(3.5f), p)
+            c.drawRect(lx + dpf(3f), y - dpf(0.5f), cx - tw / 2f - dpf(3f), y + dpf(0.5f), p)
+        }
+
+        // riel
+        p.color = C.METER_BG
+        r.set(cx - tw / 2f, top - dpf(4f), cx + tw / 2f, bottom + dpf(4f))
+        c.drawRoundRect(r, tw / 2f, tw / 2f, p)
+        // relleno hasta la posición
+        val y = bottom - value * travel
+        if (value > 0f) {
+            p.color = fillColor
+            r.set(cx - tw / 2f, y, cx + tw / 2f, bottom + dpf(4f))
+            c.drawRoundRect(r, tw / 2f, tw / 2f, p)
+        }
+
+        // cap
+        val hw = minOf(dpf(24f), width * 0.3f)
+        val ch = capH()
+        p.color = Color.BLACK
+        p.alpha = 90
+        r.set(cx - hw, y - ch / 2f + dpf(3f), cx + hw, y + ch / 2f + dpf(3f))
+        c.drawRoundRect(r, dpf(7f), dpf(7f), p)
+        p.alpha = 255
+        p.color = if (dragging) Color.WHITE else C.CAP
+        r.set(cx - hw, y - ch / 2f, cx + hw, y + ch / 2f)
+        c.drawRoundRect(r, dpf(7f), dpf(7f), p)
+        p.color = C.CAP_SHADE
+        r.set(cx - hw, y, cx + hw, y + ch / 2f)
+        c.drawRoundRect(r, dpf(7f), dpf(7f), p)
+        p.color = fillColor
+        c.drawRect(cx - hw + dpf(6f), y - dpf(1.5f), cx + hw - dpf(6f), y + dpf(1.5f), p)
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
@@ -95,6 +102,8 @@ class FaderView(ctx: Context) : View(ctx) {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 lastY = e.y
+                dragging = true
+                invalidate()
                 parent?.requestDisallowInterceptTouchEvent(true)
             }
             MotionEvent.ACTION_MOVE -> {
@@ -106,6 +115,10 @@ class FaderView(ctx: Context) : View(ctx) {
                     invalidate()
                     onUserChange?.invoke(value)
                 }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                dragging = false
+                invalidate()
             }
         }
         return true
@@ -122,7 +135,7 @@ class Spec(
     val fmt: (Float) -> String
 )
 
-/** Perilla: arrastre vertical, doble tap = valor por defecto. */
+/** Perilla tipo anillo: arrastre vertical, doble tap = valor por defecto. */
 class KnobView(ctx: Context, private val spec: Spec) : View(ctx) {
     private var pos = 0f
     private var acc = 0f
@@ -182,46 +195,48 @@ class KnobView(ctx: Context, private val spec: Spec) : View(ctx) {
 
     override fun onDraw(c: Canvas) {
         val h = height.toFloat()
-        val r = h * 0.36f
-        val cx = r + dpf(10f)
+        val r = h * 0.34f
+        val cx = r + dpf(8f)
         val cy = h / 2f
         oval.set(cx - r, cy - r, cx + r, cy + r)
         p.style = Paint.Style.STROKE
-        p.strokeCap = Paint.Cap.BUTT
-        p.strokeWidth = r * 0.45f
+        p.strokeCap = Paint.Cap.ROUND
+        p.strokeWidth = dpf(5f)
         p.color = C.KNOB_BG
         c.drawArc(oval, 135f, 270f, false, p)
-        p.color = C.KNOB_ARC
-        if (spec.bipolar) c.drawArc(oval, 270f, (pos - 0.5f) * 270f, false, p)
-        else c.drawArc(oval, 135f, pos * 270f, false, p)
-        val ang = Math.toRadians((135f + pos * 270f).toDouble())
-        p.strokeWidth = dpf(2f)
-        p.color = Color.WHITE
-        val ri = r * 0.55f
-        val ro = r * 1.2f
-        c.drawLine(
-            cx + (Math.cos(ang) * ri).toFloat(), cy + (Math.sin(ang) * ri).toFloat(),
-            cx + (Math.cos(ang) * ro).toFloat(), cy + (Math.sin(ang) * ro).toFloat(), p
-        )
+        p.color = C.ACCENT
+        if (spec.bipolar) {
+            val sweep = (pos - 0.5f) * 270f
+            if (sweep != 0f) c.drawArc(oval, 270f, sweep, false, p)
+        } else if (pos > 0f) {
+            c.drawArc(oval, 135f, pos * 270f, false, p)
+        }
         p.style = Paint.Style.FILL
+        p.color = C.KNOB_FACE
+        c.drawCircle(cx, cy, r * 0.7f, p)
+        val ang = Math.toRadians((135f + pos * 270f).toDouble())
+        p.color = C.TEXT
+        c.drawCircle(
+            cx + (Math.cos(ang) * r * 0.45f).toFloat(),
+            cy + (Math.sin(ang) * r * 0.45f).toFloat(), dpf(3f), p
+        )
         p.typeface = FONT
         p.textAlign = Paint.Align.LEFT
         val tx = cx + r + dpf(16f)
         p.textSize = dpf(12f)
         p.color = C.TEXT_DIM
-        c.drawText(spec.label, tx, cy - dpf(5f), p)
-        p.textSize = dpf(16f)
-        p.color = Color.WHITE
-        c.drawText(valueText(), tx, cy + dpf(14f), p)
+        c.drawText(spec.label, tx, cy - dpf(6f), p)
+        p.textSize = dpf(17f)
+        p.color = C.TEXT
+        c.drawText(valueText(), tx, cy + dpf(15f), p)
     }
 }
 
-/** Paneo tipo "moño" con marcador; arrastre horizontal, doble tap = centro. */
+/** Paneo: riel con punto; arrastre horizontal, doble tap = centro. */
 class PanView(ctx: Context, private val addr: String) : View(ctx) {
     private var pos = 0.5f
     private var lastX = 0f
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val path = Path()
     private val gd = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDoubleTap(e: MotionEvent): Boolean {
             App.store.set(addr, 0.5f)
@@ -236,26 +251,21 @@ class PanView(ctx: Context, private val addr: String) : View(ctx) {
         }
     }
 
-    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-        val cx = w / 2f
-        val cy = h / 2f
-        path.reset()
-        path.moveTo(0f, cy - h * 0.4f)
-        path.lineTo(cx, cy - h * 0.08f)
-        path.lineTo(w.toFloat(), cy - h * 0.4f)
-        path.lineTo(w.toFloat(), cy + h * 0.4f)
-        path.lineTo(cx, cy + h * 0.08f)
-        path.lineTo(0f, cy + h * 0.4f)
-        path.close()
-    }
-
     override fun onDraw(c: Canvas) {
+        val pad = dpf(10f)
+        val w = width - 2 * pad
+        val cy = height / 2f
+        val cx = pad + w / 2f
         p.style = Paint.Style.FILL
-        p.color = C.PAN_BG
-        c.drawPath(path, p)
-        p.color = Color.WHITE
-        val x = pos * width
-        c.drawRect(x - dpf(1.5f), 0f, x + dpf(1.5f), height.toFloat(), p)
+        p.color = C.METER_BG
+        c.drawRect(pad, cy - dpf(2f), pad + w, cy + dpf(2f), p)
+        val x = pad + pos * w
+        p.color = C.ACCENT
+        c.drawRect(minOf(cx, x), cy - dpf(2f), maxOf(cx, x), cy + dpf(2f), p)
+        p.color = C.TICK
+        c.drawRect(cx - dpf(1f), cy - dpf(6f), cx + dpf(1f), cy + dpf(6f), p)
+        p.color = C.TEXT
+        c.drawCircle(x, cy, dpf(7f), p)
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
@@ -266,7 +276,7 @@ class PanView(ctx: Context, private val addr: String) : View(ctx) {
                 parent?.requestDisallowInterceptTouchEvent(true)
             }
             MotionEvent.ACTION_MOVE -> {
-                val nv = (pos + (e.x - lastX) / maxOf(width.toFloat(), 1f)).coerceIn(0f, 1f)
+                val nv = (pos + (e.x - lastX) / maxOf(width - dpf(20f), 1f)).coerceIn(0f, 1f)
                 lastX = e.x
                 if (nv != pos) App.store.set(addr, nv)
             }
@@ -327,23 +337,10 @@ class MeterView(ctx: Context, private val l: Int, private val r: Int = -1) : Vie
     }
 }
 
-/** Pantalla METERS: los 40 medidores en una sola vista. */
+/** Pantalla METERS: todos los medidores de la consola en una sola vista. */
 class AllMetersView(ctx: Context) : View(ctx) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val labels: Array<String> = Array(MixerClient.METER_COUNT) { i ->
-        when {
-            i < 16 -> "${i + 1}"
-            i == 16 -> "AUX L"
-            i == 17 -> "AUX R"
-            i < 26 -> "FX${(i - 18) / 2 + 1}${if ((i - 18) % 2 == 0) "L" else "R"}"
-            i < 32 -> "B${i - 25}"
-            i < 36 -> "FXS${i - 31}"
-            i == 36 -> "LR L"
-            i == 37 -> "LR R"
-            i == 38 -> "MON L"
-            else -> "MON R"
-        }
-    }
+    private val labels: List<String> = meterLabels()
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -357,14 +354,15 @@ class AllMetersView(ctx: Context) : View(ctx) {
 
     override fun onDraw(c: Canvas) {
         val m = App.client?.meters ?: return
-        val n = m.size
+        val n = minOf(labels.size, m.size)
+        if (n == 0) return
         val pad = dpf(16f)
         val labelH = dpf(26f)
         val slot = (width - 2 * pad) / n
-        val bw = slot * 0.55f
+        val bw = slot * 0.6f
         val top = pad
         val bottom = height - pad - labelH
-        p.textSize = dpf(11f)
+        p.textSize = dpf(if (n > 50) 9f else 11f)
         p.typeface = FONT
         p.textAlign = Paint.Align.CENTER
         for (i in 0 until n) {
@@ -375,34 +373,5 @@ class AllMetersView(ctx: Context) : View(ctx) {
             p.color = C.TEXT_DIM
             c.drawText(labels[i], x + bw / 2f, bottom + dpf(18f), p)
         }
-    }
-}
-
-/** Ícono de WiFi: verde conectado, rojo sin consola. */
-class WifiIcon(ctx: Context) : View(ctx) {
-    var ok = false
-        set(v) {
-            if (field != v) {
-                field = v
-                invalidate()
-            }
-        }
-    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val r = RectF()
-
-    override fun onDraw(c: Canvas) {
-        val cx = width / 2f
-        val cy = height * 0.68f
-        p.color = if (ok) C.GREEN else C.RED
-        p.style = Paint.Style.STROKE
-        p.strokeCap = Paint.Cap.ROUND
-        p.strokeWidth = dpf(3f)
-        for (i in 1..3) {
-            val rad = dpf(6.5f) * i
-            r.set(cx - rad, cy - rad, cx + rad, cy + rad)
-            c.drawArc(r, 225f, 90f, false, p)
-        }
-        p.style = Paint.Style.FILL
-        c.drawCircle(cx, cy, dpf(2.5f), p)
     }
 }

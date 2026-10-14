@@ -13,39 +13,40 @@ import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
 
+/** Paleta AirMix: grafito azulado + coral como acento. */
 object C {
-    val BG = Color.parseColor("#1B1B1B")
-    val TOP = Color.parseColor("#141414")
-    val NAV_BG = Color.parseColor("#1A1A1A")
-    val PANEL = Color.parseColor("#2E2E2E")
-    val GRAPH = Color.parseColor("#161616")
-    val STRIP_A = Color.parseColor("#232323")
-    val STRIP_B = Color.parseColor("#2B2B2B")
-    val HEADER = Color.parseColor("#3A3A3A")
-    val HEADER_SENDS = Color.parseColor("#BDBDBD")
-    val ACCENT = Color.parseColor("#FDB71A")
-    val CYAN = Color.parseColor("#1ED5E3")
-    val MUTE = Color.parseColor("#D0101A")
-    val BTN = Color.parseColor("#111111")
-    val BTN_LIGHT = Color.parseColor("#D9D9D9")
-    val BTN_GREY = Color.parseColor("#6E6E6E")
-    val TEXT = Color.WHITE
-    val TEXT_DIM = Color.parseColor("#BDBDBD")
-    val GRID = Color.parseColor("#333333")
-    val DIVIDER = Color.parseColor("#555555")
-    val GREEN = Color.parseColor("#2FCB3A")
-    val YELLOW = Color.parseColor("#E8C51A")
-    val RED = Color.parseColor("#E53935")
-    val METER_BG = Color.parseColor("#0B0B0B")
-    val TICK = Color.parseColor("#8A8A8A")
-    val CAP_EDGE = Color.parseColor("#9E9E9E")
-    val CAP_TOP = Color.parseColor("#E4E4E4")
-    val KNOB_BG = Color.parseColor("#0E0E0E")
-    val KNOB_ARC = Color.parseColor("#9C9C9C")
-    val PAN_BG = Color.parseColor("#3A3A3A")
+    val BG = Color.parseColor("#0F1216")
+    val TOP = Color.parseColor("#0B0E11")
+    val NAV_BG = Color.parseColor("#0B0E11")
+    val PANEL = Color.parseColor("#161B21")
+    val SURFACE = Color.parseColor("#1C222A")
+    val SURFACE2 = Color.parseColor("#252D37")
+    val LINE = Color.parseColor("#2E3743")
+    val GRAPH = Color.parseColor("#0C0F13")
+    val STRIP = Color.parseColor("#141920")
+    val ACCENT = Color.parseColor("#FF7A45")
+    val SENDS = Color.parseColor("#4CC9F0")
+    val MUTE = Color.parseColor("#E5484D")
+    val SOLO = Color.parseColor("#F5C542")
+    val TEXT = Color.parseColor("#E8EDF2")
+    val TEXT_DIM = Color.parseColor("#8A96A3")
+    val INK = Color.parseColor("#0B0E11")
+    val GRID = Color.parseColor("#1F262F")
+    val DIVIDER = Color.parseColor("#2E3743")
+    val GREEN = Color.parseColor("#3DD68C")
+    val YELLOW = Color.parseColor("#F5C542")
+    val RED = Color.parseColor("#E5484D")
+    val METER_BG = Color.parseColor("#0A0D10")
+    val TICK = Color.parseColor("#4A5562")
+    val FILL = Color.parseColor("#5B6775")
+    val CAP = Color.parseColor("#E8EDF2")
+    val CAP_SHADE = Color.parseColor("#B9C2CC")
+    val KNOB_BG = Color.parseColor("#2A323C")
+    val KNOB_FACE = Color.parseColor("#1C222A")
 }
 
 val FONT: Typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+val FONT_MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
 const val MATCH = -1
 const val WRAP = -2
@@ -79,17 +80,35 @@ fun Context.col(): LinearLayout = LinearLayout(this).apply { orientation = Linea
 
 fun Context.divider(): View = View(this).apply {
     setBackgroundColor(C.DIVIDER)
-    layoutParams = lp(MATCH, dp(2)).m(0, dp(14), 0, dp(14))
+    layoutParams = lp(MATCH, dp(1)).m(0, dp(16), 0, dp(16))
 }
 
 fun Context.scroll(v: View): ScrollView = ScrollView(this).apply {
     isFillViewport = true
+    isVerticalScrollBarEnabled = false
     addView(v, FrameLayout.LayoutParams(MATCH, WRAP))
 }
 
-enum class BtnStyle { NAV, TAB, LIGHT, MUTE, SMALL }
+fun Context.rounded(color: Int, radiusDp: Int = 10, strokeColor: Int = 0): GradientDrawable =
+    GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = dp(radiusDp).toFloat()
+        if (strokeColor != 0) setStroke(dp(1), strokeColor)
+    }
 
-class Btn(ctx: Context, label: String, private val style: BtnStyle = BtnStyle.NAV, sp: Float = 16f) : TextView(ctx) {
+/** Card: superficie redondeada para agrupar controles. */
+fun Context.card(): LinearLayout = col().apply {
+    background = rounded(C.SURFACE, 14)
+    setPadding(dp(18), dp(14), dp(18), dp(14))
+}
+
+fun Context.sectionTitle(s: String): TextView = label(s, 13f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL).apply {
+    letterSpacing = 0.12f
+}
+
+enum class BtnStyle { NAV, TAB, LIGHT, MUTE, SMALL, OUTLINE }
+
+class Btn(ctx: Context, label: String, private val style: BtnStyle = BtnStyle.LIGHT, sp: Float = 16f) : TextView(ctx) {
     var activeColor = C.ACCENT
     var active = false
         set(v) {
@@ -97,6 +116,7 @@ class Btn(ctx: Context, label: String, private val style: BtnStyle = BtnStyle.NA
             refresh()
         }
     private val bg = GradientDrawable()
+    private val strokeW = ctx.dp(1)
 
     init {
         text = label
@@ -104,7 +124,7 @@ class Btn(ctx: Context, label: String, private val style: BtnStyle = BtnStyle.NA
         typeface = FONT
         gravity = Gravity.CENTER
         includeFontPadding = false
-        bg.cornerRadius = ctx.dp(4).toFloat()
+        bg.cornerRadius = ctx.dp(if (style == BtnStyle.TAB) 8 else 10).toFloat()
         background = bg
         isClickable = true
         refresh()
@@ -113,19 +133,27 @@ class Btn(ctx: Context, label: String, private val style: BtnStyle = BtnStyle.NA
     fun refresh() {
         val b: Int
         val t: Int
+        var stroke = 0
         if (active) {
-            b = activeColor
-            t = if (activeColor == C.MUTE) C.TEXT else Color.BLACK
+            b = if (style == BtnStyle.TAB) Color.TRANSPARENT else activeColor
+            t = when {
+                style == BtnStyle.TAB -> activeColor
+                activeColor == C.MUTE -> Color.WHITE
+                else -> C.INK
+            }
+            if (style == BtnStyle.TAB) stroke = activeColor
         } else {
             when (style) {
-                BtnStyle.NAV -> { b = C.BTN; t = C.TEXT_DIM }
-                BtnStyle.TAB -> { b = C.TOP; t = C.TEXT_DIM }
-                BtnStyle.LIGHT -> { b = C.BTN_LIGHT; t = Color.BLACK }
-                BtnStyle.MUTE -> { b = C.BTN_GREY; t = C.TEXT }
-                BtnStyle.SMALL -> { b = C.BTN_GREY; t = C.TEXT }
+                BtnStyle.NAV -> { b = Color.TRANSPARENT; t = C.TEXT_DIM }
+                BtnStyle.TAB -> { b = Color.TRANSPARENT; t = C.TEXT_DIM }
+                BtnStyle.LIGHT -> { b = C.SURFACE2; t = C.TEXT }
+                BtnStyle.MUTE -> { b = C.SURFACE2; t = C.TEXT; stroke = C.LINE }
+                BtnStyle.SMALL -> { b = C.SURFACE2; t = C.TEXT_DIM }
+                BtnStyle.OUTLINE -> { b = Color.TRANSPARENT; t = C.TEXT; stroke = C.LINE }
             }
         }
         bg.setColor(b)
+        bg.setStroke(if (stroke != 0) strokeW else 0, stroke)
         setTextColor(t)
     }
 }
@@ -148,13 +176,14 @@ fun Context.toggle(
     return b
 }
 
-/** Botón "ON/OFF" estilo MX-MIX para gate/dyn/eq. */
+/** Interruptor ON/OFF para gate/dyn/eq. */
 fun Context.onOff(addr: String): Btn {
-    val b = Btn(this, "OFF", BtnStyle.NAV, 20f)
+    val b = Btn(this, "OFF", BtnStyle.LIGHT, 18f)
+    b.activeColor = C.ACCENT
     b.bind(addr) { v ->
         val on = v.asI() != 0
         b.active = on
-        b.text = if (on) "ON" else "OFF"
+        b.text = if (on) "● ON" else "○ OFF"
     }
     b.setOnClickListener { App.store.set(addr, if (App.store.int(addr) != 0) 0 else 1) }
     return b
@@ -163,12 +192,14 @@ fun Context.onOff(addr: String): Btn {
 /** Selector segmentado (MANUAL/AUTO, PEAK/RMS...). */
 fun Context.choice(addr: String, labels: List<String>): LinearLayout {
     val r = row()
+    r.background = rounded(C.SURFACE2, 10)
+    r.setPadding(dp(3), dp(3), dp(3), dp(3))
     val btns = ArrayList<Btn>()
     labels.forEachIndexed { i, s ->
-        val b = Btn(this, s, BtnStyle.NAV, 18f)
+        val b = Btn(this, s, BtnStyle.NAV, 16f)
         b.setOnClickListener { App.store.set(addr, i) }
         btns.add(b)
-        r.addView(b, lp(dp(110), dp(50)))
+        r.addView(b, lp(dp(96), dp(42)))
     }
     r.bind(addr) { v ->
         val x = v.asI()
@@ -177,13 +208,13 @@ fun Context.choice(addr: String, labels: List<String>): LinearLayout {
     return r
 }
 
-/** Selector de lista (TYPE ⋮). */
+/** Selector de lista. */
 fun Context.selector(title: String, addr: String, options: List<String>): Btn {
-    val b = Btn(this, "$title\n—", BtnStyle.NAV, 17f)
+    val b = Btn(this, "$title\n—", BtnStyle.LIGHT, 16f)
     b.maxLines = 2
     b.gravity = Gravity.CENTER_VERTICAL or Gravity.START
     b.setPadding(dp(14), 0, dp(14), 0)
-    b.bind(addr) { v -> b.text = "$title  ⋮\n${options.getOrElse(v.asI()) { "?" }}" }
+    b.bind(addr) { v -> b.text = "$title  ▾\n${options.getOrElse(v.asI()) { "?" }}" }
     b.setOnClickListener {
         val pm = PopupMenu(this, b)
         options.forEachIndexed { i, s -> pm.menu.add(0, i, i, s) }
@@ -197,17 +228,18 @@ fun Context.selector(title: String, addr: String, options: List<String>): Btn {
 }
 
 /** Un bit de una máscara (asignación a DCA / mute groups). */
-fun Context.bitToggle(text: String, addr: String, bit: Int): Btn {
-    val b = Btn(this, text, BtnStyle.LIGHT, 18f)
+fun Context.bitToggle(text: String, addr: String, bit: Int, color: Int = C.ACCENT): Btn {
+    val b = Btn(this, text, BtnStyle.LIGHT, 17f)
+    b.activeColor = color
     b.bind(addr) { v -> b.active = ((v.asI() shr bit) and 1) == 1 }
     b.setOnClickListener { App.store.set(addr, App.store.int(addr) xor (1 shl bit)) }
     return b
 }
 
 private val SCRIBBLE = intArrayOf(
-    Color.parseColor("#444444"), Color.parseColor("#E53935"), Color.parseColor("#43A047"),
-    Color.parseColor("#FDD835"), Color.parseColor("#1E88E5"), Color.parseColor("#D81B60"),
-    Color.parseColor("#00ACC1"), Color.WHITE
+    Color.parseColor("#2E3743"), Color.parseColor("#E5484D"), Color.parseColor("#3DD68C"),
+    Color.parseColor("#F5C542"), Color.parseColor("#4C8DF6"), Color.parseColor("#C764E8"),
+    Color.parseColor("#4CC9F0"), Color.parseColor("#E8EDF2")
 )
 
 val COLOR_NAMES = listOf(
@@ -215,15 +247,19 @@ val COLOR_NAMES = listOf(
     "Apagado inv.", "Rojo inv.", "Verde inv.", "Amarillo inv.", "Azul inv.", "Magenta inv.", "Cian inv.", "Blanco inv."
 )
 
-/** Colores de scribble strip X Air: 0-7 normales, 8-15 invertidos. */
+/** Chip de nombre con el color de scribble de la consola (0-7 lleno, 8-15 contorno). */
 fun applyScribble(v: TextView, color: Int) {
     val c = color.coerceIn(0, 15)
     val base = SCRIBBLE[c % 8]
+    val d = GradientDrawable()
+    d.cornerRadius = v.dpf(8f)
     if (c < 8) {
-        v.setBackgroundColor(base)
-        v.setTextColor(if (c == 0 || c == 1 || c == 4 || c == 5) Color.WHITE else Color.BLACK)
+        d.setColor(base)
+        v.setTextColor(if (c == 0 || c == 1 || c == 4 || c == 5) Color.WHITE else C.INK)
     } else {
-        v.setBackgroundColor(Color.BLACK)
-        v.setTextColor(if (c == 8) Color.WHITE else base)
+        d.setColor(Color.TRANSPARENT)
+        d.setStroke(v.dpf(1.5f).toInt(), if (c == 8) C.TEXT_DIM else base)
+        v.setTextColor(if (c == 8) C.TEXT else base)
     }
+    v.background = d
 }
