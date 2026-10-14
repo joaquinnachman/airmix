@@ -53,6 +53,21 @@ struct SendTarget: Equatable {
     var fx = 0
     static let main = SendTarget()
     var label: String { bus > 0 ? "BUS \(bus)" : fx > 0 ? "FX \(fx)" : "MAIN" }
+
+    /// Dirección del nombre del bus / FX send (para mostrar "1-JUANCITO").
+    var nameAddr: String? {
+        if bus > 0 { return Strip(kind: .bus, idx: bus).nameAddr }
+        if fx > 0 { return Strip(kind: .fxsend, idx: fx).nameAddr }
+        return nil
+    }
+
+    /// "1-JUANCITO" / "FX1-REVERB"; si no tiene nombre, "BUS 1" / "FX 1".
+    func display(_ name: String) -> String {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        if bus > 0 { return n.isEmpty ? "BUS \(bus)" : "\(bus)-\(n)" }
+        if fx > 0 { return n.isEmpty ? "FX \(fx)" : "FX\(fx)-\(n)" }
+        return "MAIN"
+    }
 }
 
 struct Strip: Equatable, Hashable {

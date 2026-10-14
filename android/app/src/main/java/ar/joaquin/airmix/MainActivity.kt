@@ -45,7 +45,6 @@ class MainActivity : Activity() {
     private var lastTimerText = ""
     private var pendingExport: String? = null
     private lateinit var rail: LinearLayout
-    private lateinit var modelLabel: TextView
     private lateinit var conn: Btn
     private val tabBtns = HashMap<Tab, Btn>()
     private val layerBtns = ArrayList<Btn>()
@@ -187,7 +186,6 @@ class MainActivity : Activity() {
         App.firmware = fw
         prefs().edit().putString("model", model).apply()
         val changed = App.applyModel(model)
-        modelLabel.text = "$model  ·  $fw"
         updateConn()
         if (changed) {
             sends = SendTarget.MAIN
@@ -220,8 +218,7 @@ class MainActivity : Activity() {
         val logo = label("AIRMIX", 22f, C.ACCENT, Gravity.START or Gravity.CENTER_VERTICAL)
         logo.letterSpacing = 0.15f
         top.addView(logo, lp(WRAP, MATCH))
-        modelLabel = label(App.console.model, 13f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL)
-        top.addView(modelLabel, lp(dp(140), MATCH).m(l = dp(14)))
+        top.addView(View(this), lp(dp(40), 1))
         for (t in Tab.values()) {
             val b = Btn(this, t.label, BtnStyle.TAB, 16f)
             b.setOnClickListener {
@@ -368,10 +365,10 @@ class MainActivity : Activity() {
         header.setPadding(dp(16), 0, dp(10), 0)
         if (sendsMode) {
             header.background = rounded(C.SENDS, 0)
-            header.addView(
-                label("SENDS ON FADER  →  ${sends.label}", 20f, C.INK, Gravity.START or Gravity.CENTER_VERTICAL),
-                lp(0, MATCH, 1f)
-            )
+            val title = label("SENDS ON FADER  →  ${sends.display("")}", 20f, C.INK, Gravity.START or Gravity.CENTER_VERTICAL)
+            val target = sends
+            target.nameAddr?.let { a -> title.bind(a) { v -> title.text = "SENDS ON FADER  →  ${target.display(v.toString())}" } }
+            header.addView(title, lp(0, MATCH, 1f))
             val change = Btn(this, "CAMBIAR ▾", BtnStyle.LIGHT, 15f)
             change.setOnClickListener { showSendsPopup(change) }
             header.addView(change, lp(dp(130), dp(40)).m(r = dp(8)))
@@ -415,10 +412,14 @@ class MainActivity : Activity() {
         val box = col()
         box.background = rounded(C.SURFACE, 14, C.LINE)
         box.setPadding(dp(8), dp(8), dp(8), dp(8))
-        val pw = PopupWindow(box, dp(400), WRAP, true)
+        val pw = PopupWindow(box, dp(560), WRAP, true)
         pw.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         val cell = { t: SendTarget, label: String ->
-            val b = Btn(this, label, BtnStyle.LIGHT, 18f)
+            val b = Btn(this, label, BtnStyle.LIGHT, 17f)
+            b.maxLines = 1
+            b.ellipsize = android.text.TextUtils.TruncateAt.END
+            b.setPadding(dp(8), 0, dp(8), 0)
+            t.nameAddr?.let { a -> b.bind(a) { v -> b.text = t.display(v.toString()) } }
             b.activeColor = if (t.fx > 0) C.ACCENT else C.SENDS
             b.active = t == sends
             b.setOnClickListener {

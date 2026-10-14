@@ -57,6 +57,24 @@ enum class Section(val label: String) { CONFIG("CONFIG"), GATE("GATE"), DYN("DYN
 data class SendTarget(val bus: Int = 0, val fx: Int = 0) {
     val label: String get() = if (bus > 0) "BUS $bus" else if (fx > 0) "FX $fx" else "MAIN"
 
+    /** Dirección del nombre del bus / FX send (para mostrar "1-JUANCITO"). */
+    val nameAddr: String?
+        get() = when {
+            bus > 0 -> Strip(Kind.BUS, bus).nameAddr
+            fx > 0 -> Strip(Kind.FXSEND, fx).nameAddr
+            else -> null
+        }
+
+    /** "1-JUANCITO" / "FX1-REVERB"; si no tiene nombre, "BUS 1" / "FX 1". */
+    fun display(name: String): String {
+        val n = name.trim()
+        return when {
+            bus > 0 -> if (n.isEmpty()) "BUS $bus" else "$bus-$n"
+            fx > 0 -> if (n.isEmpty()) "FX $fx" else "FX$fx-$n"
+            else -> "MAIN"
+        }
+    }
+
     companion object {
         val MAIN = SendTarget()
     }

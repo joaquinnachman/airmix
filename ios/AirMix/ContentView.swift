@@ -54,10 +54,7 @@ struct ContentView: View {
     private var topBar: some View {
         HStack(spacing: compact ? 6 : 10) {
             Text("AIRMIX").font(bf(compact ? 17 : 21)).kerning(2.5).foregroundColor(C.accent)
-            if !compact {
-                Text(core.firmware.isEmpty ? core.console.model : "\(core.console.model) · \(core.firmware)")
-                    .font(bf(12)).foregroundColor(C.dim).frame(width: 130, alignment: .leading)
-            }
+            Spacer().frame(width: compact ? 4 : 30)
             ForEach(Tab.allCases, id: \.self) { t in
                 Pill(text: t.rawValue, active: tab == t, style: .tab, size: compact ? 12 : 15) { tab = t }
                     .frame(width: compact ? 84 : 120, height: 38)
@@ -152,7 +149,7 @@ struct ContentView: View {
         return VStack(spacing: 0) {
             HStack(spacing: 10) {
                 if sends != .main {
-                    Text("SENDS ON FADER  →  \(sends.label)").font(bf(compact ? 15 : 20)).foregroundColor(C.ink)
+                    SendTargetName(target: sends, prefix: "SENDS ON FADER  →  ").font(bf(compact ? 15 : 20)).foregroundColor(C.ink)
                     Spacer()
                     sendsMenu(label: "CAMBIAR ▾", dark: true)
                     Button { sends = .main } label: {
@@ -200,11 +197,11 @@ struct ContentView: View {
         Menu {
             Button("MAIN (normal)") { sends = .main }
             ForEach(1...max(core.console.buses, 1), id: \.self) { b in
-                Button("BUS \(b)") { sends = SendTarget(bus: b, fx: 0) }
+                Button { sends = SendTarget(bus: b, fx: 0) } label: { SendTargetName(target: SendTarget(bus: b, fx: 0)) }
             }
             if core.console.fxSends > 0 {
                 ForEach(1...core.console.fxSends, id: \.self) { f in
-                    Button("FX \(f)") { sends = SendTarget(bus: 0, fx: f) }
+                    Button { sends = SendTarget(bus: 0, fx: f) } label: { SendTargetName(target: SendTarget(bus: 0, fx: f)) }
                 }
             }
         } label: {
@@ -252,6 +249,21 @@ struct ContentView: View {
         let list = stripsOfKind(s.kind)
         guard let i = list.firstIndex(of: s), !list.isEmpty else { return }
         detail = list[(i + dir + list.count) % list.count]
+    }
+}
+
+/// "1-JUANCITO": número de bus + nombre que tiene en la consola.
+struct SendTargetName: View {
+    let target: SendTarget
+    var prefix = ""
+    @ObservedObject var name: Param
+    init(target: SendTarget, prefix: String = "") {
+        self.target = target
+        self.prefix = prefix
+        _name = ObservedObject(wrappedValue: target.nameAddr.map { Store.shared.param($0) } ?? Param("-"))
+    }
+    var body: some View {
+        Text(prefix + target.display(name.value?.stringValue ?? ""))
     }
 }
 
