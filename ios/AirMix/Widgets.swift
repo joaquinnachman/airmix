@@ -28,7 +28,7 @@ struct FaderView: View {
                 let lx = cx - 16
                 for (db, lbl) in FaderView.marks {
                     let y = bottom - CGFloat(Fmt.dbToFader(db)) * travel
-                    ctx.draw(Text(lbl).font(bold(9)).foregroundColor(db == 0 ? C.text : C.tick), at: CGPoint(x: lx, y: y), anchor: .trailing)
+                    ctx.draw(Text(lbl).font(bf(9)).foregroundColor(db == 0 ? C.text : C.tick), at: CGPoint(x: lx, y: y), anchor: .trailing)
                     ctx.fill(Path(CGRect(x: lx + 3, y: y - 0.5, width: max(cx - tw / 2 - 3 - lx - 3, 0), height: 1)), with: .color(db == 0 ? C.text : C.tick))
                 }
                 ctx.fill(Path(roundedRect: CGRect(x: cx - tw / 2, y: top - 4, width: tw, height: travel + 8), cornerRadius: tw / 2), with: .color(C.meterBg))
@@ -131,8 +131,8 @@ struct KnobView: View {
             }
             .frame(width: 52, height: 52)
             VStack(alignment: .leading, spacing: 2) {
-                Text(spec.label).font(bold(12)).foregroundColor(C.dim)
-                Text(text).font(bold(16)).foregroundColor(C.text).lineLimit(1).minimumScaleFactor(0.7)
+                Text(spec.label).font(bf(12)).foregroundColor(C.dim)
+                Text(text).font(bf(16)).foregroundColor(C.text).lineLimit(1).minimumScaleFactor(0.7)
             }
             Spacer(minLength: 0)
         }
@@ -259,7 +259,7 @@ struct AllMetersView: View {
                     let rect = CGRect(x: x, y: pad, width: bw, height: bottom - pad)
                     ctx.fill(Path(rect), with: .color(C.meterBg))
                     MeterDraw.bar(ctx, rect, m[i])
-                    ctx.draw(Text(labels[i]).font(bold(n > 50 ? 8 : 10)).foregroundColor(C.dim), at: CGPoint(x: x + bw / 2, y: bottom + 14))
+                    ctx.draw(Text(labels[i]).font(bf(n > 50 ? 8 : 10)).foregroundColor(C.dim), at: CGPoint(x: x + bw / 2, y: bottom + 14))
                 }
             }
         }
@@ -349,12 +349,12 @@ struct EqGraphView: View {
                 for (k, hz) in EqGraphView.gridHz.enumerated() {
                     let x = xHz(hz)
                     ctx.fill(Path(CGRect(x: x, y: r.minY, width: 1, height: r.height)), with: .color(C.grid))
-                    ctx.draw(Text(EqGraphView.gridLbl[k]).font(bold(10)).foregroundColor(C.dim), at: CGPoint(x: x, y: r.maxY + 14))
+                    ctx.draw(Text(EqGraphView.gridLbl[k]).font(bf(10)).foregroundColor(C.dim), at: CGPoint(x: x, y: r.maxY + 14))
                 }
                 for db in stride(from: -15, through: 15, by: 5) {
                     let y = yDb(Float(db))
                     ctx.fill(Path(CGRect(x: r.minX, y: y, width: r.width, height: 1)), with: .color(C.grid))
-                    ctx.draw(Text("\(db)").font(bold(10)).foregroundColor(C.dim), at: CGPoint(x: r.minX - 5, y: y), anchor: .trailing)
+                    ctx.draw(Text("\(db)").font(bf(10)).foregroundColor(C.dim), at: CGPoint(x: r.minX - 5, y: y), anchor: .trailing)
                 }
                 // curva
                 let eqOn = i("\(p)/eq/on", 0) != 0

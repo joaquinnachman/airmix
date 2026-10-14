@@ -41,7 +41,7 @@ enum C {
     ]
 }
 
-func bold(_ size: CGFloat) -> Font { .system(size: size, weight: .bold) }
+func bf(_ size: CGFloat) -> Font { .system(size: size, weight: .bold) }
 
 enum PillStyle { case nav, tab, light, mute, small, outline }
 
@@ -84,7 +84,7 @@ struct Pill: View {
     var body: some View {
         Button(action: action) {
             Text(text)
-                .font(bold(size))
+                .font(bf(size))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.6)
@@ -175,8 +175,8 @@ struct ListSelector: View {
             }
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(title)  ▾").font(bold(12)).foregroundColor(C.dim)
-                Text(p.int.flatMap { $0 >= 0 && $0 < options.count ? options[$0] : nil } ?? "—").font(bold(16)).foregroundColor(C.text)
+                Text("\(title)  ▾").font(bf(12)).foregroundColor(C.dim)
+                Text(p.int.flatMap { $0 >= 0 && $0 < options.count ? options[$0] : nil } ?? "—").font(bf(16)).foregroundColor(C.text)
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -221,7 +221,7 @@ struct NameChip: View {
         let filled = c < 8
         let n = name.value?.stringValue ?? ""
         Text(n.isEmpty ? fallback : n)
-            .font(bold(14))
+            .font(bf(14))
             .lineLimit(1)
             .minimumScaleFactor(0.6)
             .padding(.horizontal, 4)
@@ -241,7 +241,7 @@ struct DbLabel: View {
         self.color = color
     }
     var body: some View {
-        Text(Fmt.faderDb(p.float ?? 0)).font(bold(13)).foregroundColor(color)
+        Text(Fmt.faderDb(p.float ?? 0)).font(bf(13)).foregroundColor(color)
     }
 }
 
@@ -250,7 +250,7 @@ struct Card<Content: View>: View {
     @ViewBuilder let content: () -> Content
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(bold(12)).kerning(1.4).foregroundColor(C.dim)
+            Text(title).font(bf(12)).kerning(1.4).foregroundColor(C.dim)
             content()
         }
         .padding(16)

@@ -11,7 +11,7 @@ struct StripView: View {
         let send = strip.sendAddr(target)
         let faderAddr = send ?? strip.faderAddr
         VStack(spacing: compact ? 4 : 6) {
-            Text(strip.title).font(bold(11)).foregroundColor(C.dim).padding(.top, 4)
+            Text(strip.title).font(bf(11)).foregroundColor(C.dim).padding(.top, 4)
             NameChip(strip: strip)
                 .padding(.horizontal, 6)
                 .onTapGesture { onOpen(strip) }
@@ -91,7 +91,7 @@ struct ConfigPanel: View {
                         RoundedRectangle(cornerRadius: 10).fill(C.scribble[(colorP.int ?? 0) % 8]).frame(width: 52, height: 50)
                     }
                     TextField("Nombre", text: $name)
-                        .font(bold(20))
+                        .font(bf(20))
                         .foregroundColor(C.text)
                         .focused($editing)
                         .submitLabel(.done)
@@ -129,13 +129,13 @@ struct ConfigPanel: View {
                 }
                 Card(title: "GRUPOS") {
                     HStack(spacing: 6) {
-                        Text("DCA").font(bold(14)).foregroundColor(C.dim).frame(width: 50)
+                        Text("DCA").font(bf(14)).foregroundColor(C.dim).frame(width: 50)
                         ForEach(0..<c.dcas, id: \.self) { i in
                             BitToggle("\(i + 1)", addr: "\(p)/grp/dca", bit: i).frame(width: 44, height: 44)
                         }
                     }
                     HStack(spacing: 6) {
-                        Text("MUTE").font(bold(14)).foregroundColor(C.dim).frame(width: 50)
+                        Text("MUTE").font(bf(14)).foregroundColor(C.dim).frame(width: 50)
                         ForEach(0..<c.muteGroups, id: \.self) { i in
                             BitToggle("\(i + 1)", addr: "\(p)/grp/mute", bit: i, color: C.mute).frame(width: 44, height: 44)
                         }
@@ -158,7 +158,7 @@ struct SourceLabel: View {
     var body: some View {
         let x = p.int ?? 0
         let t: String = x32 ? (x == 0 ? "OFF" : x <= 32 ? "IN \(Fmt.two(x))" : "#\(x)") : "INP \(Fmt.two(x + 1))"
-        Text("Fuente: \(t)").font(bold(14)).foregroundColor(C.dim)
+        Text("Fuente: \(t)").font(bf(14)).foregroundColor(C.dim)
     }
 }
 
@@ -169,8 +169,8 @@ struct KeySource: View {
     init(addr: String) { _p = ObservedObject(wrappedValue: Store.shared.param(addr)) }
     var body: some View {
         VStack(spacing: 2) {
-            Text("KEY SOURCE").font(bold(12)).foregroundColor(C.dim)
-            Text(Core.shared.console.keySourceName(p.int ?? 0)).font(bold(15)).foregroundColor(C.text)
+            Text("KEY SOURCE").font(bf(12)).foregroundColor(C.dim)
+            Text(Core.shared.console.keySourceName(p.int ?? 0)).font(bf(15)).foregroundColor(C.text)
         }
         .frame(width: 140, height: 54)
         .background(RoundedRectangle(cornerRadius: 10).fill(C.surface2))
@@ -320,7 +320,7 @@ struct SendsPanel: View {
                 let addr = "\(strip.prefix)/mix/\(Fmt.two(t.2))/level"
                 let color = t.0 == "FX" ? C.accent : C.sends
                 VStack(spacing: 4) {
-                    Text("\(t.0) \(t.1)").font(bold(14)).foregroundColor(color).padding(.top, 6)
+                    Text("\(t.0) \(t.1)").font(bf(14)).foregroundColor(color).padding(.top, 6)
                     DbLabel(addr: addr, color: C.text)
                     FaderView(addr: addr, fill: color).padding(.bottom, 8)
                 }
@@ -338,7 +338,7 @@ struct FxTypeLabel: View {
     var body: some View {
         let i = p.int ?? -1
         Text(i >= 0 && i < FX_TYPES.count ? FX_TYPES[i] : (i >= 0 ? "Efecto #\(i)" : "—"))
-            .font(bold(20)).foregroundColor(C.text).lineLimit(1).minimumScaleFactor(0.6)
+            .font(bf(20)).foregroundColor(C.text).lineLimit(1).minimumScaleFactor(0.6)
     }
 }
 
@@ -352,7 +352,7 @@ struct EffectsView: View {
                     if n + 1 <= c.fxUnits { FxTile(n: n + 1) } else { Color.clear }
                 }
             }
-            Text("Editar parámetros y cambiar el tipo de efecto: próxima versión.").font(bold(13)).foregroundColor(C.dim)
+            Text("Editar parámetros y cambiar el tipo de efecto: próxima versión.").font(bf(13)).foregroundColor(C.dim)
         }
         .padding(10)
         .background(C.bg)
@@ -365,7 +365,7 @@ struct FxTile: View {
         let c = Core.shared.console
         let rtn: String? = c.isX32 ? (n <= 4 ? "/fxrtn/\(Fmt.two(2 * n - 1))" : nil) : "/rtn/\(n)"
         HStack(spacing: 12) {
-            Text("FX \(n)").font(bold(16)).foregroundColor(C.accent).frame(width: 50)
+            Text("FX \(n)").font(bf(16)).foregroundColor(C.accent).frame(width: 50)
             FxTypeLabel(n: n).frame(maxWidth: .infinity, alignment: .leading)
             if let r = rtn {
                 VStack {
@@ -376,7 +376,7 @@ struct FxTile: View {
                 }
                 ParamToggle("MUTE", addr: "\(r)/mix/on", invert: true, color: C.mute, style: .mute, size: 15).frame(width: 84, height: 46)
             } else {
-                Text("insert").font(bold(14)).foregroundColor(C.dim).frame(width: 84)
+                Text("insert").font(bf(14)).foregroundColor(C.dim).frame(width: 84)
             }
         }
         .padding(.horizontal, 16)

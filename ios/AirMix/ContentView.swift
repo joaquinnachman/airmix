@@ -53,10 +53,10 @@ struct ContentView: View {
 
     private var topBar: some View {
         HStack(spacing: compact ? 6 : 10) {
-            Text("AIRMIX").font(bold(compact ? 17 : 21)).kerning(2.5).foregroundColor(C.accent)
+            Text("AIRMIX").font(bf(compact ? 17 : 21)).kerning(2.5).foregroundColor(C.accent)
             if !compact {
                 Text(core.firmware.isEmpty ? core.console.model : "\(core.console.model) · \(core.firmware)")
-                    .font(bold(12)).foregroundColor(C.dim).frame(width: 130, alignment: .leading)
+                    .font(bf(12)).foregroundColor(C.dim).frame(width: 130, alignment: .leading)
             }
             ForEach(Tab.allCases, id: \.self) { t in
                 Pill(text: t.rawValue, active: tab == t, style: .tab, size: compact ? 12 : 15) { tab = t }
@@ -65,7 +65,7 @@ struct ContentView: View {
             Spacer(minLength: 0)
             Button { showConnect = true } label: {
                 Text(core.connected ? "●  \(core.console.model)  \(core.client.host ?? "")" : "●  SIN CONEXIÓN")
-                    .font(bold(compact ? 11 : 14))
+                    .font(bf(compact ? 11 : 14))
                     .lineLimit(1)
                     .foregroundColor(core.connected ? C.green : C.red)
                     .padding(.horizontal, 12)
@@ -86,10 +86,10 @@ struct ContentView: View {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 let t = ShowTimer.elapsed()
                 VStack(spacing: 0) {
-                    Text("SHOW").font(bold(10)).foregroundColor(C.dim)
+                    Text("SHOW").font(bf(10)).foregroundColor(C.dim)
                     Text(ShowTimer.format(t)).font(.system(size: compact ? 18 : 22, weight: .bold, design: .monospaced))
                         .foregroundColor(ShowTimer.running ? C.green : (t > 0 ? C.solo : C.dim))
-                    if !compact { Text("tocá: ▶ / ❚❚").font(bold(9)).foregroundColor(C.tick) }
+                    if !compact { Text("tocá: ▶ / ❚❚").font(bf(9)).foregroundColor(C.tick) }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
@@ -152,15 +152,15 @@ struct ContentView: View {
         return VStack(spacing: 0) {
             HStack(spacing: 10) {
                 if sends != .main {
-                    Text("SENDS ON FADER  →  \(sends.label)").font(bold(compact ? 15 : 20)).foregroundColor(C.ink)
+                    Text("SENDS ON FADER  →  \(sends.label)").font(bf(compact ? 15 : 20)).foregroundColor(C.ink)
                     Spacer()
                     sendsMenu(label: "CAMBIAR ▾", dark: true)
                     Button { sends = .main } label: {
-                        Text("SALIR ✕").font(bold(14)).foregroundColor(C.text).padding(.horizontal, 14).frame(height: 38)
+                        Text("SALIR ✕").font(bf(14)).foregroundColor(C.text).padding(.horizontal, 14).frame(height: 38)
                             .background(RoundedRectangle(cornerRadius: 10).fill(C.surface2))
                     }.buttonStyle(.plain)
                 } else {
-                    Text(layer?.label ?? "").font(bold(compact ? 16 : 20)).foregroundColor(C.text)
+                    Text(layer?.label ?? "").font(bf(compact ? 16 : 20)).foregroundColor(C.text)
                     Spacer()
                     sendsMenu(label: "SENDS ON FADER ▾", dark: false)
                 }
@@ -208,7 +208,7 @@ struct ContentView: View {
                 }
             }
         } label: {
-            Text(label).font(bold(14)).foregroundColor(dark ? C.ink : C.text)
+            Text(label).font(bf(14)).foregroundColor(dark ? C.ink : C.text)
                 .padding(.horizontal, 14).frame(height: 38)
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(dark ? C.ink.opacity(0.4) : C.line))
         }
@@ -264,7 +264,7 @@ struct DetailTitle: View {
     }
     var body: some View {
         let n = name.value?.stringValue ?? ""
-        Text(n.isEmpty ? strip.title : "\(strip.title)  ·  \(n)").font(bold(20)).foregroundColor(C.text).lineLimit(1)
+        Text(n.isEmpty ? strip.title : "\(strip.title)  ·  \(n)").font(bf(20)).foregroundColor(C.text).lineLimit(1)
     }
 }
 
@@ -317,7 +317,7 @@ struct NotesPanel: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                Text("NOTAS").font(bold(18)).foregroundColor(C.text)
+                Text("NOTAS").font(bf(18)).foregroundColor(C.text)
                 Spacer()
                 Pill(text: "+ MARCA", size: 14) { mark() }.frame(width: 96, height: 38)
                 Pill(text: "BORRAR", style: .outline, size: 13) { confirmClear = true }.frame(width: 80, height: 38)
@@ -365,10 +365,10 @@ struct ConnectSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Conectar a la consola").font(bold(22)).foregroundColor(C.text)
-            Text("Consolas encontradas en la red:").font(bold(14)).foregroundColor(C.dim)
+            Text("Conectar a la consola").font(bf(22)).foregroundColor(C.text)
+            Text("Consolas encontradas en la red:").font(bf(14)).foregroundColor(C.dim)
             if core.discovered.isEmpty {
-                Text("Buscando…").font(bold(15)).foregroundColor(C.dim)
+                Text("Buscando…").font(bf(15)).foregroundColor(C.dim)
             }
             ForEach(core.discovered) { d in
                 Pill(text: "\(d.model)  ·  \(d.name)  ·  \(d.ip)", size: 16) {
@@ -379,14 +379,14 @@ struct ConnectSheet: View {
                 }
                 .frame(height: 50)
             }
-            Text("O escribí la IP (XR12 / XR16 / XR18 / X32):").font(bold(14)).foregroundColor(C.dim)
+            Text("O escribí la IP (XR12 / XR16 / XR18 / X32):").font(bf(14)).foregroundColor(C.dim)
             TextField("192.168.1.1", text: $ip)
                 .keyboardType(.numbersAndPunctuation)
-                .font(bold(18))
+                .font(bf(18))
                 .foregroundColor(C.text)
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 10).fill(C.bg))
-            if !error.isEmpty { Text(error).foregroundColor(C.red).font(bold(14)) }
+            if !error.isEmpty { Text(error).foregroundColor(C.red).font(bf(14)) }
             HStack {
                 Pill(text: "BUSCAR DE NUEVO", style: .outline, size: 15) { core.discovered.removeAll(); core.client.discover() }.frame(width: 180, height: 46)
                 Spacer()
@@ -448,18 +448,18 @@ struct ScenesView: View {
             VStack(spacing: 14) {
                 Card(title: "GUARDAR LA MEZCLA ACTUAL") {
                     TextField("Nombre de la escena", text: $name)
-                        .font(bold(17)).foregroundColor(C.text).padding(12)
+                        .font(bf(17)).foregroundColor(C.text).padding(12)
                         .background(RoundedRectangle(cornerRadius: 10).fill(C.bg))
                     TextField("Nota (opcional): lugar, fecha…", text: $notes)
-                        .font(bold(15)).foregroundColor(C.text).padding(12)
+                        .font(bf(15)).foregroundColor(C.text).padding(12)
                         .background(RoundedRectangle(cornerRadius: 10).fill(C.bg))
                     Pill(text: "LEER CONSOLA Y GUARDAR", active: true, size: 16) { scenes.save(name: name, notes: notes) }
                         .frame(height: 52)
                     Text("Se guarda en el dispositivo (app Archivos → AirMix → Escenas) y te ofrece exportar el .scn. Se abre en X-Air Edit / X32-Edit.")
-                        .font(bold(12)).foregroundColor(C.dim)
+                        .font(bf(12)).foregroundColor(C.dim)
                 }
                 Card(title: "ESTADO") {
-                    Text(scenes.status).font(bold(15)).foregroundColor(C.text)
+                    Text(scenes.status).font(bf(15)).foregroundColor(C.text)
                 }
                 Spacer(minLength: 0)
             }
@@ -474,11 +474,11 @@ struct ScenesView: View {
                     VStack(spacing: 8) {
                         let list = files()
                         if list.isEmpty {
-                            Text("Todavía no hay escenas guardadas.").font(bold(15)).foregroundColor(C.dim)
+                            Text("Todavía no hay escenas guardadas.").font(bf(15)).foregroundColor(C.dim)
                         }
                         ForEach(list, id: \.self) { url in
                             HStack(spacing: 8) {
-                                Text(url.deletingPathExtension().lastPathComponent).font(bold(16)).foregroundColor(C.text).lineLimit(1)
+                                Text(url.deletingPathExtension().lastPathComponent).font(bf(16)).foregroundColor(C.text).lineLimit(1)
                                 Spacer()
                                 Pill(text: "CARGAR", active: true, activeColor: C.sends, size: 14) {
                                     let text = (try? Data(contentsOf: url)).flatMap { String(data: $0, encoding: .isoLatin1) } ?? ""
