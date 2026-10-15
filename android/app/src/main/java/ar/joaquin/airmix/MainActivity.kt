@@ -17,6 +17,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.ScrollView
@@ -215,9 +216,12 @@ class MainActivity : Activity() {
         val top = row()
         top.setBackgroundColor(C.TOP)
         top.setPadding(dp(16), 0, dp(12), 0)
-        val logo = label("AIRMIX", 22f, C.ACCENT, Gravity.START or Gravity.CENTER_VERTICAL)
-        logo.letterSpacing = 0.15f
-        top.addView(logo, lp(WRAP, MATCH))
+        // Logo 8C (curva EQ + "airmix"), mismo vector que el ícono. Generado por tools/logo/gen.py.
+        val logo = ImageView(this)
+        logo.setImageResource(R.drawable.logo_lockup)
+        logo.scaleType = ImageView.ScaleType.FIT_START
+        logo.contentDescription = "AirMix"
+        top.addView(logo, lp(dp(118), dp(28)))
         top.addView(View(this), lp(dp(40), 1))
         for (t in Tab.values()) {
             val b = Btn(this, t.label, BtnStyle.TAB, 16f)

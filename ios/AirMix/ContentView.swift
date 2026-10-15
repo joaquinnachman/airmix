@@ -53,7 +53,12 @@ struct ContentView: View {
 
     private var topBar: some View {
         HStack(spacing: compact ? 6 : 10) {
-            Text("AIRMIX").font(bf(compact ? 17 : 21)).kerning(2.5).foregroundColor(C.accent)
+            // Logo 8C (curva EQ + "airmix"), mismo vector que el ícono. Generado por tools/logo/gen.py.
+            Image("Logo")
+                .resizable()
+                .scaledToFit()
+                .frame(height: compact ? 22 : 28)
+                .accessibilityLabel("AirMix")
             Spacer().frame(width: compact ? 4 : 30)
             ForEach(Tab.allCases, id: \.self) { t in
                 Pill(text: t.rawValue, active: tab == t, style: .tab, size: compact ? 12 : 15) { tab = t }

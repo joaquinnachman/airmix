@@ -15,3 +15,4 @@
 | Cronómetro de show persistente | ✅ | ✅ |
 | Notas con marcas de tiempo | ✅ | ✅ |
 | Layout iPhone (tiras con scroll horizontal) | — | ✅ |
+| Ícono 8C (curva EQ) + logo en la barra superior, mismo vector | ✅ | ✅ |
