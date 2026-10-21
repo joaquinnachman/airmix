@@ -1,5 +1,26 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.4.3
+- **EFECTOS editables.** Elegís el FX a la izquierda y a la derecha cambiás el tipo de efecto y todos sus parámetros, con valores reales (ms, s, Hz, dB…). También el retorno, el send master y el mute.
+  - Los rangos salen de las mismas tablas que usan X-Air Edit y las escenas .scn.
+  - Verificar en la consola: en X32, los FX 5-8 usan la lista reducida de efectos (sin reverbs).
+- **RTA en el EQ.** El analizador de la consola se dibuja detrás de la curva del canal o bus. Se prende y apaga con el botón RTA.
+  - Al abrir el EQ, la app selecciona ese canal en la consola, porque el RTA muestra el canal seleccionado.
+  - Verificar en la consola: que el RTA siga al canal abierto (si no, revisar la fuente del RTA en X-Air Edit).
+- **RESET del EQ** con confirmación. Ahora deja el EQ plano de verdad: 0 dB y tipo, frecuencia y Q de fábrica en todas las bandas. Antes solo ponía las ganancias en 0, así que si una banda era un corte o se había movido la frecuencia, parecía que no hacía nada.
+- **Nombre con OK.** El nombre del canal se manda al tocar OK (o "Listo" en el teclado). Después la app se lo vuelve a pedir a la consola para confirmar: muestra ✓ si quedó, reintenta hasta 3 veces y avisa si no pudo.
+- **Colores.** Paleta de 16 colores en CONFIG para canales y buses. El color del bus se ve en toda la app:
+  - en los envíos de cada canal;
+  - en el selector de "sends on fader";
+  - en el encabezado y el fader cuando estás mandando a ese bus.
+- **ENVÍOS con nombres.** Cada columna muestra el nombre del bus ("1-JUANCITO") con su color, y en FX el efecto cargado ("FX1 · Hall Reverb").
+- **TEMAS.** Nueva pestaña en el panel de notas con la lista de temas de la banda.
+  - Se carga desde un archivo .txt, .docx, .doc o .rtf, con un tema por línea. La numeración ("1.", "02 -") se ignora sola.
+  - Lo que va después de " // " o de una tabulación queda como nota del tema. Ejemplo: `Bésame Mucho // Am, arranca Garko`.
+  - Se edita a mano: agregar, ordenar, nota por tema y borrar.
+  - Tocando un tema queda marcado como el que suena. ANTERIOR / SIGUIENTE para moverte durante el show.
+- **Ícono** con el "airmix" más grande.
+
 ## Novedades 0.3
 - **ESCENAS (.scn).** Nueva pestaña para guardar y cargar escenas.
   - Guardar lee la consola completa y crea un .scn compatible con X-Air Edit / X32-Edit. Queda en la tablet y te ofrece exportarlo a Drive, Descargas, etc.

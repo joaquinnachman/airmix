@@ -66,6 +66,15 @@ class EqGraphView(
     var selected = 1
     var onSelect: ((Int) -> Unit)? = null
 
+    /** RTA de fondo (lo redibuja el tick de 30 fps mientras está prendido). */
+    var rtaOn = false
+        set(v) {
+            field = v
+            if (v && isAttachedToWindow) App.meterViews.add(this) else App.meterViews.remove(this)
+            invalidate()
+        }
+    private val rtaPath = Path()
+
     private val n = 160
     private val curve = FloatArray(n)
     private var dirty = true
@@ -116,6 +125,40 @@ class EqGraphView(
         if (hpf) {
             bind(hpOnA, inv); bind(hpFA, inv)
         }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (rtaOn) App.meterViews.add(this)
+    }
+
+    override fun onDetachedFromWindow() {
+        App.meterViews.remove(this)
+        super.onDetachedFromWindow()
+    }
+
+    /** Espectro: 100 bandas log de 20 Hz a 20 kHz, -80..0 dB de abajo hacia arriba. */
+    private fun drawRta(c: Canvas) {
+        val m = App.client?.rta ?: return
+        val n = m.size
+        rtaPath.reset()
+        rtaPath.moveTo(gl, gt + gh)
+        for (i in 0 until n) {
+            val x = gl + gw * i / (n - 1)
+            val y = gt + gh * (1f - ((m[i] + 80f) / 80f).coerceIn(0f, 1f))
+            rtaPath.lineTo(x, y)
+        }
+        rtaPath.lineTo(gl + gw, gt + gh)
+        rtaPath.close()
+        paint.style = Paint.Style.FILL
+        paint.color = C.SENDS
+        paint.alpha = 60
+        c.drawPath(rtaPath, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = dpf(1f)
+        paint.alpha = 150
+        c.drawPath(rtaPath, paint)
+        paint.alpha = 255
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -192,6 +235,13 @@ class EqGraphView(
         while (db <= 15) {
             c.drawText(db.toString(), gl - dpf(5f), yDb(db.toFloat()) + dpf(4f), paint)
             db += 5
+        }
+
+        if (rtaOn) {
+            c.save()
+            c.clipRect(gl, gt, gl + gw, gt + gh)
+            drawRta(c)
+            c.restore()
         }
 
         path.reset()

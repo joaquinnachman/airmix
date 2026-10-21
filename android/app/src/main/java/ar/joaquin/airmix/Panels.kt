@@ -1,5 +1,6 @@
 package ar.joaquin.airmix
 
+import android.app.AlertDialog
 import android.content.Context
 import android.text.InputFilter
 import android.text.InputType
@@ -9,8 +10,11 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupMenu
+import android.widget.TextView
+import android.widget.Toast
 
 /** Tira de canal (igual en HOME y en el detalle). */
 fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): View {
@@ -52,6 +56,15 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
         App.store.set(faderAddr, f)
         dbText.text = Fmt.faderDb(f)
     }
+    // En "sends on fader" a un bus, el fader y los dB toman el color del bus.
+    if (sendAddr != null && target.bus > 0) {
+        fader.bind(Strip(Kind.BUS, target.bus).colorAddr) { v ->
+            val c = BusColor.of(v.asI())
+            fader.fillColor = c
+            fader.invalidate()
+            dbText.setTextColor(c)
+        }
+    }
     faderRow.addView(fader, lp(0, MATCH, 1f))
     if (s.meterL >= 0) {
         faderRow.addView(
@@ -76,7 +89,7 @@ object Panels {
         Section.CONFIG -> ctx.scroll(config(ctx, s))
         Section.GATE -> ctx.scroll(gate(ctx, s.prefix))
         Section.DYN -> ctx.scroll(dyn(ctx, s.prefix))
-        Section.EQ -> eq(ctx, s.prefix, if (s.kind == Kind.CH) 4 else 6, s.kind == Kind.CH)
+        Section.EQ -> eq(ctx, s.prefix, if (s.kind == Kind.CH) 4 else 6, s.kind == Kind.CH, s.selIdx())
         Section.SENDS -> sends(ctx, s)
     }
 
@@ -112,18 +125,6 @@ object Panels {
 
         val idCard = addCard(root, "IDENTIDAD")
         val r1 = row()
-        val colorBtn = Btn(ctx, "", BtnStyle.LIGHT)
-        colorBtn.bind(s.colorAddr) { v -> applyScribble(colorBtn, v.asI()) }
-        colorBtn.setOnClickListener {
-            val pm = PopupMenu(ctx, colorBtn)
-            COLOR_NAMES.forEachIndexed { i, n -> pm.menu.add(0, i, i, n) }
-            pm.setOnMenuItemClickListener { item ->
-                App.store.set(s.colorAddr, item.itemId)
-                true
-            }
-            pm.show()
-        }
-        r1.addView(colorBtn, lp(dp(56), dp(52)))
 
         val name = EditText(ctx)
         name.setTextColor(C.TEXT)
@@ -137,20 +138,49 @@ object Panels {
         name.setPadding(dp(16), 0, dp(16), 0)
         name.hint = "Nombre"
         name.bind(s.nameAddr) { v -> if (!name.hasFocus()) name.setText(v.toString()) }
+        val ok = Btn(ctx, "OK", BtnStyle.LIGHT, 18f)
+        ok.activeColor = C.GREEN
+        val commit = {
+            name.clearFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(name.windowToken, 0)
+            NameCommit.send(ctx, s.nameAddr, name.text.toString(), ok)
+        }
         name.setOnEditorActionListener { _, id, _ ->
             if (id == EditorInfo.IME_ACTION_DONE) {
-                App.store.set(s.nameAddr, name.text.toString())
-                name.clearFocus()
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.hideSoftInputFromWindow(name.windowToken, 0)
+                commit()
                 true
             } else false
         }
-        r1.addView(name, lp(dp(260), dp(52)).m(l = dp(14)))
+        ok.setOnClickListener { commit() }
+        r1.addView(name, lp(dp(260), dp(52)))
+        r1.addView(ok, lp(dp(84), dp(52)).m(l = dp(8)))
         r1.addView(View(ctx), lp(0, 1, 1f))
         r1.addView(toggle("MUTE", s.onAddr, BtnStyle.MUTE, invert = true, color = C.MUTE, sp = 18f), lp(dp(120), dp(52)))
         r1.addView(toggle("SOLO", s.soloAddr, color = C.SOLO, sp = 18f), lp(dp(120), dp(52)).m(l = dp(12)))
         idCard.addView(r1)
+
+        // Paleta de color (la misma de la consola): fila de llenos y fila de contorno.
+        idCard.addView(sectionTitle("COLOR"), lp(MATCH, dp(20)).m(t = dp(14), b = dp(6)))
+        val swatches = ArrayList<TextView>()
+        for (rowIdx in 0..1) {
+            val r = row()
+            for (k in 0 until 8) {
+                val ci = rowIdx * 8 + k
+                val sw = label("", 15f)
+                applyScribble(sw, ci)
+                sw.contentDescription = COLOR_NAMES[ci]
+                sw.isClickable = true
+                sw.setOnClickListener { App.store.set(s.colorAddr, ci) }
+                swatches.add(sw)
+                r.addView(sw, lp(dp(54), dp(40)).m(r = dp(8), b = dp(8)))
+            }
+            idCard.addView(r)
+        }
+        idCard.bind(s.colorAddr) { v ->
+            val cur = v.asI()
+            for (i in swatches.indices) swatches[i].text = if (i == cur) "✓" else ""
+        }
 
         if (s.kind == Kind.CH) {
             val p = s.prefix
@@ -283,7 +313,7 @@ object Panels {
 
     // ------------------------------------------------------------------ EQ
 
-    private fun eq(ctx: Context, p: String, bands: Int, hpf: Boolean): View = with(ctx) {
+    private fun eq(ctx: Context, p: String, bands: Int, hpf: Boolean, sel: Int): View = with(ctx) {
         val root = col()
         root.setPadding(dp(20), dp(14), dp(20), dp(12))
 
@@ -329,15 +359,46 @@ object Panels {
             top.addView(b, lp(dp(92), dp(42)).m(r = dp(6)))
         }
         top.addView(View(ctx), lp(0, 1, 1f))
+        val rta = Btn(ctx, "RTA", BtnStyle.OUTLINE, 15f)
+        rta.activeColor = C.SENDS
+        rta.active = rtaOn
+        graph.rtaOn = rtaOn
+        rta.setOnClickListener {
+            rtaOn = !rtaOn
+            rta.active = rtaOn
+            graph.rtaOn = rtaOn
+            App.client?.setRta(rtaOn)
+        }
+        top.addView(rta, lp(dp(72), dp(42)).m(r = dp(6)))
         val rst = Btn(ctx, "RESET", BtnStyle.OUTLINE, 15f)
-        rst.setOnClickListener { for (i in 1..bands) App.store.set("$p/eq/$i/g", 0.5f) }
+        rst.setOnClickListener {
+            AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setMessage("¿Poner el EQ plano? Todas las bandas vuelven a 0 dB con su tipo, frecuencia y Q de fábrica.")
+                .setPositiveButton("Resetear") { _, _ -> EqDefaults.reset(p, bands) }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
         top.addView(rst, lp(dp(90), dp(42)))
         root.addView(top)
         root.addView(graph, lp(MATCH, 0, 1f).m(t = dp(10), b = dp(10)))
         root.addView(bottom, lp(MATCH, dp(96)))
         select(1)
+        // El RTA de la consola muestra el canal seleccionado: lo seleccionamos y pedimos el RTA mientras el EQ esté a la vista.
+        root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                if (sel >= 0) App.store.set("/-stat/selidx", sel)
+                App.client?.setRta(rtaOn)
+            }
+
+            override fun onViewDetachedFromWindow(v: View) {
+                App.client?.setRta(false)
+            }
+        })
         root
     }
+
+    /** RTA prendido/apagado (se recuerda mientras la app está abierta). */
+    var rtaOn = true
 
     // ------------------------------------------------------------------ ENVÍOS
 
@@ -345,19 +406,36 @@ object Panels {
         val root = row()
         root.gravity = Gravity.TOP
         root.setPadding(dp(12), dp(10), dp(12), dp(10))
-        val targets = ArrayList<Triple<String, Int, Int>>()
-        for (i in 1..App.console.buses) targets.add(Triple("BUS", i, i))
-        for (i in 1..App.console.fxSends) targets.add(Triple("FX", i, 6 + i))
-        for ((kind, num, mixIdx) in targets) {
+        val targets = ArrayList<SendTarget>()
+        for (i in 1..App.console.buses) targets.add(SendTarget(bus = i))
+        for (i in 1..App.console.fxSends) targets.add(SendTarget(fx = i))
+        for (t in targets) {
+            val mixIdx = if (t.bus > 0) t.bus else 6 + t.fx
             val addr = "${s.prefix}/mix/${Fmt.two(mixIdx)}/level"
             val c = col()
             c.gravity = Gravity.CENTER_HORIZONTAL
             c.background = rounded(C.SURFACE, 12)
-            c.addView(label("$kind $num", 15f, if (kind == "FX") C.ACCENT else C.SENDS), lp(MATCH, dp(30)).m(t = dp(6)))
+            c.setPadding(dp(4), 0, dp(4), 0)
+            // Nombre del destino: "1-JUANCITO" (con el color del bus) o "FX1 · Hall Reverb".
+            val title = label(t.label, 14f, if (t.fx > 0) C.ACCENT else C.SENDS)
+            title.maxLines = 2
+            title.ellipsize = android.text.TextUtils.TruncateAt.END
+            c.addView(title, lp(MATCH, dp(40)).m(t = dp(6)))
             val vtxt = label("", 13f, C.TEXT)
             c.addView(vtxt, lp(MATCH, dp(20)))
             val f = FaderView(ctx)
-            f.fillColor = if (kind == "FX") C.ACCENT else C.SENDS
+            f.fillColor = if (t.fx > 0) C.ACCENT else C.SENDS
+            if (t.bus > 0) {
+                title.bind(t.nameAddr!!) { v -> title.text = t.display(v.toString()) }
+                title.bind(Strip(Kind.BUS, t.bus).colorAddr) { v ->
+                    val col = BusColor.of(v.asI())
+                    title.setTextColor(col)
+                    f.fillColor = col
+                    f.invalidate()
+                }
+            } else {
+                title.bind("/fx/${t.fx}/type") { v -> title.text = Fx.label(t.fx, v.asI()) }
+            }
             f.bind(addr) { x ->
                 val fl = x.asF()
                 f.setValue(fl)
@@ -375,53 +453,144 @@ object Panels {
 
     // ------------------------------------------------------------------ EFFECTS / otros
 
+    /** FX que se está editando en EFECTOS (se recuerda al cambiar de pestaña). */
+    private var fxSel = 1
+
     fun effects(ctx: Context): View = with(ctx) {
-        val root = col()
+        val root = row()
+        root.gravity = Gravity.TOP
         root.setBackgroundColor(C.BG)
-        root.setPadding(dp(10), dp(10), dp(10), dp(4))
+        root.setPadding(dp(10), dp(10), dp(10), dp(10))
         val n = App.console.fxUnits
-        for (r in 0 until (n + 1) / 2) {
-            val rowV = row()
-            for (cIdx in 0..1) {
-                val i = r * 2 + cIdx + 1
-                if (i <= n) rowV.addView(fxTile(ctx, i), lp(0, MATCH, 1f).m(dp(5), dp(5), dp(5), dp(5)))
+        if (fxSel > n) fxSel = 1
+
+        val editor = FrameLayout(ctx)
+        val list = col()
+        val tiles = ArrayList<Btn>()
+        for (i in 1..n) {
+            val b = Btn(ctx, "FX $i", BtnStyle.LIGHT, 16f)
+            b.maxLines = 2
+            b.gravity = Gravity.CENTER_VERTICAL or Gravity.START
+            b.setPadding(dp(14), 0, dp(10), 0)
+            b.ellipsize = android.text.TextUtils.TruncateAt.END
+            b.bind("/fx/$i/type") { v -> b.text = "FX $i\n" + Fx.typeName(i, v.asI()) }
+            b.active = i == fxSel
+            b.setOnClickListener {
+                fxSel = i
+                for (k in tiles.indices) tiles[k].active = k + 1 == i
+                editor.removeAllViews()
+                editor.addView(fxEditor(ctx, i), FrameLayout.LayoutParams(MATCH, MATCH))
             }
-            root.addView(rowV, lp(MATCH, 0, 1f))
+            tiles.add(b)
+            list.addView(b, lp(MATCH, dp(if (n > 4) 60 else 72)).m(b = dp(8)))
         }
-        root.addView(
-            label("Editar parámetros y cambiar el tipo de efecto: próxima versión.", 13f, C.TEXT_DIM),
-            lp(MATCH, dp(30))
-        )
+        root.addView(scroll(list), lp(dp(240), MATCH).m(r = dp(10)))
+        editor.addView(fxEditor(ctx, fxSel), FrameLayout.LayoutParams(MATCH, MATCH))
+        root.addView(editor, lp(0, MATCH, 1f))
         root
     }
 
-    private fun fxTile(ctx: Context, n: Int): View = with(ctx) {
-        val c = App.console
-        val t = row()
-        t.background = rounded(C.SURFACE, 14)
-        t.setPadding(dp(18), dp(8), dp(18), dp(8))
-        val num = label("FX $n", 16f, C.ACCENT)
-        t.addView(num, lp(dp(56), MATCH))
-        val name = label("—", 22f, C.TEXT, Gravity.START or Gravity.CENTER_VERTICAL)
-        name.bind("/fx/$n/type") { v -> name.text = FX_TYPES.getOrElse(v.asI()) { "Efecto #${v.asI()}" } }
-        t.addView(name, lp(0, MATCH, 1f).m(l = dp(8), r = dp(8)))
-        // Retorno de cada FX: X Air /rtn/N; X32 FX 1-4 vuelven por /fxrtn (pares L/R: 1-2, 3-4...).
-        val rtn: String? = if (c.isX32) (if (n <= 4) "/fxrtn/${Fmt.two(2 * n - 1)}" else null) else "/rtn/$n"
-        if (rtn != null) {
-            val knobs = col()
-            knobs.addView(knob(Spec("RETORNO", "$rtn/mix/fader", def = 0.75f) { Fmt.faderDb(it) + " dB" }))
-            if (!c.isX32) knobs.addView(knob(Spec("SEND MASTER", "/fxsend/$n/mix/fader", def = 0.75f) { Fmt.faderDb(it) + " dB" }))
-            t.addView(knobs)
-            t.addView(toggle("MUTE", "$rtn/mix/on", BtnStyle.MUTE, invert = true, color = C.MUTE, sp = 16f), lp(dp(90), dp(48)))
-        } else {
-            t.addView(label("insert", 14f, C.TEXT_DIM), lp(dp(90), MATCH))
+    private fun fxEditor(ctx: Context, n: Int): View = with(ctx) {
+        val root = panelRoot()
+        root.setPadding(0, 0, 0, 0)
+        val typeAddr = "/fx/$n/type"
+
+        // --- tipo de efecto + retorno
+        val head = addCard(root, "FX $n")
+        val r = row()
+        val typeBtn = Btn(ctx, "—", BtnStyle.LIGHT, 18f)
+        typeBtn.maxLines = 2
+        typeBtn.gravity = Gravity.CENTER_VERTICAL or Gravity.START
+        typeBtn.setPadding(dp(16), 0, dp(16), 0)
+        typeBtn.bind(typeAddr) { v -> typeBtn.text = "EFECTO  ▾\n" + Fx.typeName(n, v.asI()) }
+        typeBtn.setOnClickListener {
+            val pm = PopupMenu(ctx, typeBtn)
+            Fx.typeOptions(n).forEachIndexed { i, name -> pm.menu.add(0, i, i, name) }
+            pm.setOnMenuItemClickListener { item ->
+                App.store.set(typeAddr, item.itemId)
+                // Los parámetros cambian con el tipo: se vuelven a pedir.
+                typeBtn.postDelayed({
+                    for (k in 1..64) App.store.forget("/fx/$n/par/${Fmt.two(k)}")
+                    for (k in 1..16) App.client?.query("/fx/$n/par/${Fmt.two(k)}")
+                }, 400)
+                true
+            }
+            pm.show()
         }
-        t
+        r.addView(typeBtn, lp(dp(260), dp(60)))
+        val rtn = Fx.returnPrefix(n)
+        if (rtn != null) {
+            r.addView(knob(Spec("RETORNO", "$rtn/mix/fader", def = 0.75f) { Fmt.faderDb(it) + " dB" }), lp(dp(190), dp(80)).m(l = dp(16)))
+            if (!App.console.isX32) r.addView(knob(Spec("SEND MASTER", "/fxsend/$n/mix/fader", def = 0.75f) { Fmt.faderDb(it) + " dB" }))
+            r.addView(View(ctx), lp(0, 1, 1f))
+            r.addView(toggle("MUTE", "$rtn/mix/on", BtnStyle.MUTE, invert = true, color = C.MUTE, sp = 17f), lp(dp(100), dp(52)))
+        } else {
+            r.addView(label("insert", 15f, C.TEXT_DIM), lp(dp(100), dp(52)).m(l = dp(16)))
+        }
+        head.addView(r)
+
+        // --- parámetros (se rearman cuando cambia el tipo)
+        val parCard = addCard(root, "PARÁMETROS")
+        val grid = col()
+        parCard.addView(grid)
+        var shown: String? = "?"
+        grid.bind(typeAddr) { v ->
+            val abbr = Fx.abbr(n, v.asI())
+            if (abbr == shown) return@bind
+            shown = abbr
+            grid.removeAllViews()
+            val pars = Fx.params(abbr)
+            for (chunk in pars.indices.chunked(4)) {
+                val kr = row()
+                for (i in chunk) kr.addView(knob(Fx.spec(n, i, pars[i])))
+                grid.addView(kr)
+            }
+        }
+        root.addView(
+            label("Doble toque en una perilla = valor inicial. Los cambios van directo a la consola.", 13f, C.TEXT_DIM, Gravity.START),
+            lp(MATCH, dp(24))
+        )
+        scroll(root)
     }
 
     fun placeholder(ctx: Context, what: String): View = with(ctx) {
         val v = label("$what — próxima versión", 20f, C.TEXT_DIM)
         v.setBackgroundColor(C.BG)
         v
+    }
+}
+
+/**
+ * Cambio de nombre con confirmación: manda el nombre, se lo vuelve a pedir a la consola
+ * y, si no coincide, reintenta (hasta 3 veces). El botón muestra … / ✓.
+ */
+object NameCommit {
+    fun send(ctx: Context, addr: String, raw: String, ok: Btn, attempt: Int = 1) {
+        val txt = raw.trim().take(12)
+        ok.text = "…"
+        ok.active = false
+        App.store.set(addr, txt)
+        ok.postDelayed({
+            App.store.forget(addr)
+            App.client?.query(addr)
+        }, 700)
+        ok.postDelayed({
+            val v = App.store.get(addr)?.toString()
+            when {
+                v == txt -> {
+                    ok.text = "✓"
+                    ok.active = true
+                    ok.postDelayed({
+                        ok.text = "OK"
+                        ok.active = false
+                    }, 2000)
+                }
+                attempt < 3 -> send(ctx, addr, txt, ok, attempt + 1)
+                else -> {
+                    ok.text = "OK"
+                    Toast.makeText(ctx, "La consola no confirmó el nombre. Revisá la conexión y tocá OK de nuevo.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }, 1700)
     }
 }

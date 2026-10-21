@@ -16,6 +16,7 @@ final class MixerClient {
     static let portXAir = 10024
     static let portX32 = 10023
     static let meterCount = 96
+    static let rtaBins = 100
 
     private var fd: Int32 = -1
     private let lock = NSLock()
@@ -28,6 +29,15 @@ final class MixerClient {
     private var lastReopen: TimeInterval = 0
 
     var x32 = false
+
+    /// RTA de la consola: 100 bandas de 20 Hz a 20 kHz en dB (X Air /meters/4, X32 /meters/15).
+    let rta: UnsafeMutablePointer<Float> = {
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: MixerClient.rtaBins)
+        p.initialize(repeating: -100, count: MixerClient.rtaBins)
+        return p
+    }()
+    /// Solo se pide el RTA mientras hay un EQ en pantalla.
+    private(set) var rtaWanted = false
 
     /// dB por medidor. Lo escribe el hilo RX y lo lee la UI (lectura sin bloqueo, a propósito).
     let meters: UnsafeMutablePointer<Float> = {
@@ -47,6 +57,8 @@ final class MixerClient {
     private let metersXair = Osc.encode("/meters", [.s("/meters/1")])
     private let metersX32a = Osc.encode("/meters", [.s("/meters/0")])
     private let metersX32b = Osc.encode("/meters", [.s("/meters/2")])
+    private let rtaXair = Osc.encode("/meters", [.s("/meters/4")])
+    private let rtaX32 = Osc.encode("/meters", [.s("/meters/15")])
     private let xinfo = Osc.encode("/xinfo")
     private let meterPrefix: [UInt8] = Array("/meters/".utf8)
 
@@ -84,6 +96,13 @@ final class MixerClient {
     }
 
     func send(_ address: String, _ value: OscArg) { enqueue(address, Osc.encode(address, [value])) }
+    /// Prende/apaga el RTA. Al prender se suscribe enseguida (y el keepalive lo renueva).
+    func setRta(_ on: Bool) {
+        rtaWanted = on
+        for i in 0..<MixerClient.rtaBins { rta[i] = -100 }
+        if on { enqueue("sub:rta", x32 ? rtaX32 : rtaXair) }
+    }
+
     func query(_ address: String) { enqueue(address + "?", Osc.encode(address)) }
     /// Pide un bloque completo en texto (escenas .scn).
     func node(_ path: String) { enqueue("node:" + path, Osc.encode("/node", [.s(path)])) }
@@ -270,12 +289,30 @@ final class MixerClient {
     private func parseMeters(_ b: [UInt8], _ len: Int) -> Bool {
         if len < 24 { return false }
         for i in 0..<meterPrefix.count where b[i] != meterPrefix[i] { return false }
-        if b[9] != 0 { return false }
-        let which = Int(b[8]) - 48
+        let d0 = Int(b[8]) - 48
+        let which: Int
+        if b[9] == 0 {
+            which = d0
+        } else if b[10] == 0 && b[9] >= 48 && b[9] <= 57 {
+            which = d0 * 10 + Int(b[9]) - 48
+        } else {
+            return false
+        }
         if b[12] != 44 || b[13] != 98 { return true }
         let blobLen = Int(Osc.be32(b, 16))
         let end = min(len, 20 + blobLen)
         var p = 24
+        if (!x32 && which == 4) || (x32 && which == 15) {
+            // RTA: int16 LE en dB*256 (igual en X Air y X32).
+            var i = 0
+            while p + 1 < end && i < MixerClient.rtaBins {
+                let v = Int16(bitPattern: UInt16(b[p]) | (UInt16(b[p + 1]) << 8))
+                rta[i] = Float(v) / 256
+                i += 1
+                p += 2
+            }
+            return true
+        }
         if !x32 {
             if which != 1 { return true }
             var i = 0
@@ -337,6 +374,7 @@ final class MixerClient {
                     } else {
                         sendToMixer(metersXair, h)
                     }
+                    if rtaWanted { sendToMixer(x32 ? rtaX32 : rtaXair, h) }
                     if !alive { sendToMixer(xinfo, h) }
                 }
             }

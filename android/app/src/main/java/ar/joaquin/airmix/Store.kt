@@ -74,6 +74,12 @@ class Store {
         for (k in listeners.keys) c.query(k)
     }
 
+    /** Olvida el valor local (para pedirlo de nuevo y verificar qué tiene la consola). */
+    fun forget(addr: String) {
+        values.remove(addr)
+        touched.remove(addr)
+    }
+
     fun resetValues() {
         values.clear()
         touched.clear()

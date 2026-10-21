@@ -236,7 +236,7 @@ fun Context.bitToggle(text: String, addr: String, bit: Int, color: Int = C.ACCEN
     return b
 }
 
-private val SCRIBBLE = intArrayOf(
+val SCRIBBLE_COLORS = intArrayOf(
     Color.parseColor("#2E3743"), Color.parseColor("#E5484D"), Color.parseColor("#3DD68C"),
     Color.parseColor("#F5C542"), Color.parseColor("#4C8DF6"), Color.parseColor("#C764E8"),
     Color.parseColor("#4CC9F0"), Color.parseColor("#E8EDF2")
@@ -250,7 +250,7 @@ val COLOR_NAMES = listOf(
 /** Chip de nombre con el color de scribble de la consola (0-7 lleno, 8-15 contorno). */
 fun applyScribble(v: TextView, color: Int) {
     val c = color.coerceIn(0, 15)
-    val base = SCRIBBLE[c % 8]
+    val base = SCRIBBLE_COLORS[c % 8]
     val d = GradientDrawable()
     d.cornerRadius = v.dpf(8f)
     if (c < 8) {

@@ -28,6 +28,7 @@ class MixerClient(private val ctx: Context) {
         const val PORT_XAIR = 10024
         const val PORT_X32 = 10023
         const val METER_COUNT = 96
+        const val RTA_BINS = 100
     }
 
     @Volatile private var socket: DatagramSocket? = null
@@ -52,10 +53,18 @@ class MixerClient(private val ctx: Context) {
     /** dB por medidor (índices del bloque /meters/1 de X Air). */
     val meters = FloatArray(METER_COUNT) { -100f }
 
+    /** RTA de la consola: 100 bandas de 20 Hz a 20 kHz, en dB (X Air /meters/4, X32 /meters/15). */
+    val rta = FloatArray(RTA_BINS) { -100f }
+    /** Solo se pide el RTA mientras hay un EQ en pantalla. */
+    @Volatile var rtaWanted = false
+        private set
+
     private val xremote = Osc.encode("/xremote")
     private val metersSubXair = Osc.encode("/meters", "/meters/1")
     private val metersSubX32a = Osc.encode("/meters", "/meters/0")
     private val metersSubX32b = Osc.encode("/meters", "/meters/2")
+    private val rtaSubXair = Osc.encode("/meters", "/meters/4")
+    private val rtaSubX32 = Osc.encode("/meters", "/meters/15")
     private val xinfo = Osc.encode("/xinfo")
     private val meterPrefix = "/meters/".toByteArray(Charsets.ISO_8859_1)
 
@@ -89,6 +98,13 @@ class MixerClient(private val ctx: Context) {
     fun isConnected(): Boolean = host != null && SystemClock.uptimeMillis() - lastRx < 4000
 
     fun send(address: String, value: Any) = enqueue(address, Osc.encode(address, value))
+
+    /** Prende/apaga el RTA. Al prender se suscribe enseguida (y el keepalive lo renueva). */
+    fun setRta(on: Boolean) {
+        rtaWanted = on
+        java.util.Arrays.fill(rta, -100f)
+        if (on) enqueue("sub:rta", if (x32) rtaSubX32 else rtaSubXair)
+    }
 
     fun query(address: String) = enqueue("$address?", Osc.encode(address))
 
@@ -200,13 +216,28 @@ class MixerClient(private val ctx: Context) {
     private fun parseMeters(b: ByteArray, len: Int): Boolean {
         if (len < 24) return false
         for (i in meterPrefix.indices) if (b[i] != meterPrefix[i]) return false
-        if (b[9] != 0.toByte()) return false
-        val which = b[8].toInt() - '0'.code
+        val d0 = b[8].toInt() - '0'.code
+        val which = when {
+            b[9] == 0.toByte() -> d0
+            b[10] == 0.toByte() && b[9].toInt() in 48..57 -> d0 * 10 + (b[9].toInt() - '0'.code)
+            else -> return false
+        }
         if (b[12] != ','.code.toByte() || b[13] != 'b'.code.toByte()) return true
         val blobLen = ((b[16].toInt() and 0xff) shl 24) or ((b[17].toInt() and 0xff) shl 16) or
             ((b[18].toInt() and 0xff) shl 8) or (b[19].toInt() and 0xff)
         val end = minOf(len, 20 + blobLen)
         var p = 24
+        if ((!x32 && which == 4) || (x32 && which == 15)) {
+            // RTA: int16 LE en dB*256 (igual en X Air y X32).
+            var i = 0
+            while (p + 1 < end && i < RTA_BINS) {
+                val v = ((b[p + 1].toInt() shl 8) or (b[p].toInt() and 0xff)).toShort().toInt()
+                rta[i] = v / 256f
+                i++
+                p += 2
+            }
+            return true
+        }
         if (!x32) {
             if (which != 1) return true
             var i = 0
@@ -287,6 +318,7 @@ class MixerClient(private val ctx: Context) {
                     } else {
                         sendToMixer(metersSubXair, h)
                     }
+                    if (rtaWanted) sendToMixer(if (x32) rtaSubX32 else rtaSubXair, h)
                     if (!alive) sendToMixer(xinfo, h)
                 }
             }

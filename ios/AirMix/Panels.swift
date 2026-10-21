@@ -6,10 +6,21 @@ struct StripView: View {
     let target: SendTarget
     var compact = false
     let onOpen: (Strip) -> Void
+    @ObservedObject private var busColor: Param
+
+    init(strip: Strip, target: SendTarget, compact: Bool = false, onOpen: @escaping (Strip) -> Void) {
+        self.strip = strip
+        self.target = target
+        self.compact = compact
+        self.onOpen = onOpen
+        // En "sends on fader" a un bus, el fader y los dB toman el color del bus.
+        _busColor = ObservedObject(wrappedValue: target.bus > 0 ? Store.shared.param(Strip(kind: .bus, idx: target.bus).colorAddr) : Param("-"))
+    }
 
     var body: some View {
         let send = strip.sendAddr(target)
         let faderAddr = send ?? strip.faderAddr
+        let sendColor = target.bus > 0 ? BusColor.of(busColor.int ?? 0) : C.sends
         VStack(spacing: compact ? 4 : 6) {
             Text(strip.title).font(bf(11)).foregroundColor(C.dim).padding(.top, 4)
             NameChip(strip: strip)
@@ -23,11 +34,11 @@ struct StripView: View {
             HStack {
                 ParamToggle("S", addr: strip.soloAddr, color: C.solo, style: .small, size: 14).frame(width: 34, height: 28)
                 Spacer(minLength: 0)
-                DbLabel(addr: faderAddr, color: send != nil ? C.sends : C.text)
+                DbLabel(addr: faderAddr, color: send != nil ? sendColor : C.text)
             }
             .padding(.horizontal, 6)
             HStack(spacing: 2) {
-                FaderView(addr: faderAddr, fill: send != nil ? C.sends : C.fill)
+                FaderView(addr: faderAddr, fill: send != nil ? sendColor : C.fill)
                 if strip.meterL >= 0 {
                     MeterView(l: strip.meterL, r: strip.meterR)
                         .frame(width: strip.meterR >= 0 ? 10 : 6)
@@ -54,7 +65,7 @@ struct DetailPanel: View {
         case .config: ScrollView { ConfigPanel(strip: strip).padding(16) }
         case .gate: ScrollView { GatePanel(prefix: strip.prefix).padding(16) }
         case .dyn: ScrollView { DynPanel(prefix: strip.prefix).padding(16) }
-        case .eq: EqPanel(prefix: strip.prefix, bands: strip.kind == .ch ? 4 : 6, hpf: strip.kind == .ch).padding(16)
+        case .eq: EqPanel(prefix: strip.prefix, bands: strip.kind == .ch ? 4 : 6, hpf: strip.kind == .ch, selIdx: strip.selIdx).padding(16)
         case .sends: SendsPanel(strip: strip).padding(12)
         }
     }
@@ -67,6 +78,8 @@ struct ConfigPanel: View {
     @ObservedObject var nameP: Param
     @ObservedObject var colorP: Param
     @State private var name = ""
+    @State private var okText = "OK"
+    @State private var nameFailed = false
     @FocusState private var editing: Bool
 
     init(strip: Strip) {
@@ -83,26 +96,34 @@ struct ConfigPanel: View {
         VStack(spacing: 14) {
             Card(title: "IDENTIDAD") {
                 HStack(spacing: 12) {
-                    Menu {
-                        ForEach(0..<16, id: \.self) { i in
-                            Button(colorNames[i]) { Store.shared.set(strip.colorAddr, .i(Int32(i))) }
-                        }
-                    } label: {
-                        RoundedRectangle(cornerRadius: 10).fill(C.scribble[(colorP.int ?? 0) % 8]).frame(width: 52, height: 50)
-                    }
                     TextField("Nombre", text: $name)
                         .font(bf(20))
                         .foregroundColor(C.text)
                         .focused($editing)
                         .submitLabel(.done)
-                        .onSubmit { Store.shared.set(strip.nameAddr, .s(String(name.prefix(12)))) }
+                        .onSubmit { commitName() }
                         .padding(.horizontal, 14)
                         .frame(width: 260, height: 50)
                         .background(RoundedRectangle(cornerRadius: 10).fill(C.bg))
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(C.line))
+                    Pill(text: okText, active: okText == "✓", activeColor: C.green, size: 17) { commitName() }
+                        .frame(width: 80, height: 50)
                     Spacer()
                     ParamToggle("MUTE", addr: strip.onAddr, invert: true, color: C.mute, style: .mute, size: 17).frame(width: 110, height: 50)
                     ParamToggle("SOLO", addr: strip.soloAddr, color: C.solo, size: 17).frame(width: 110, height: 50)
+                }
+                // Paleta de color (la misma de la consola): fila de llenos y fila de contorno.
+                Text("COLOR").font(bf(12)).kerning(1.4).foregroundColor(C.dim).padding(.top, 6)
+                ForEach(0..<2, id: \.self) { rowIdx in
+                    HStack(spacing: 8) {
+                        ForEach(0..<8, id: \.self) { k in
+                            let ci = rowIdx * 8 + k
+                            ColorSwatch(index: ci, selected: (colorP.int ?? -1) == ci) {
+                                Store.shared.set(strip.colorAddr, .i(Int32(ci)))
+                            }
+                            .accessibilityLabel(colorNames[ci])
+                        }
+                    }
                 }
             }
             if strip.kind == .ch {
@@ -144,7 +165,58 @@ struct ConfigPanel: View {
             }
         }
         .onAppear { name = nameP.value?.stringValue ?? "" }
-        .onChange(of: nameP.value) { v in if !editing { name = v?.stringValue ?? "" } }
+        .onChange(of: nameP.value) { v in if !editing, let v = v { name = v.stringValue } }
+        .alert("La consola no confirmó el nombre", isPresented: $nameFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Revisá la conexión y tocá OK de nuevo.")
+        }
+    }
+
+    /// Manda el nombre, se lo vuelve a pedir a la consola y, si no coincide, reintenta (hasta 3 veces).
+    private func commitName(attempt: Int = 1) {
+        editing = false
+        let txt = String(name.trimmingCharacters(in: .whitespaces).prefix(12))
+        let addr = strip.nameAddr
+        okText = "…"
+        Store.shared.set(addr, .s(txt))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            Store.shared.forget(addr)
+            Core.shared.client.query(addr)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) {
+            if Store.shared.value(addr)?.stringValue == txt {
+                okText = "✓"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { okText = "OK" }
+            } else if attempt < 3 {
+                commitName(attempt: attempt + 1)
+            } else {
+                okText = "OK"
+                nameFailed = true
+            }
+        }
+    }
+}
+
+/// Muestra de color de scribble (0-7 lleno, 8-15 contorno).
+struct ColorSwatch: View {
+    let index: Int
+    let selected: Bool
+    let action: () -> Void
+    var body: some View {
+        let base = C.scribble[index % 8]
+        let filled = index < 8
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(filled ? base : Color.clear)
+                RoundedRectangle(cornerRadius: 8).stroke(filled ? Color.clear : (index == 8 ? C.dim : base), lineWidth: 1.5)
+                if selected {
+                    Text("✓").font(bf(16)).foregroundColor(filled ? ([0, 1, 4, 5].contains(index) ? .white : C.ink) : (index == 8 ? C.text : base))
+                }
+            }
+            .frame(width: 52, height: 38)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -259,11 +331,17 @@ struct DynPanel: View {
 
 // MARK: EQ
 
+/// RTA prendido/apagado (se recuerda mientras la app está abierta).
+var eqRtaOn = true
+
 struct EqPanel: View {
     let prefix: String
     let bands: Int
     let hpf: Bool
+    var selIdx = -1
     @State private var selected = 1
+    @State private var rta = eqRtaOn
+    @State private var confirmReset = false
     private let eqTypes = ["LCut", "LShv", "PEQ", "VEQ", "HShv", "HCut"]
 
     var body: some View {
@@ -279,11 +357,14 @@ struct EqPanel: View {
                     Pill(text: names[i - 1], active: selected == i, style: .tab, size: 14) { selected = i }.frame(width: 84, height: 40)
                 }
                 Spacer()
-                Pill(text: "RESET", style: .outline, size: 14) {
-                    for i in 1...bands { Store.shared.set("\(prefix)/eq/\(i)/g", .f(0.5)) }
-                }.frame(width: 80, height: 40)
+                Pill(text: "RTA", active: rta, activeColor: C.sends, style: .outline, size: 14) {
+                    rta.toggle()
+                    eqRtaOn = rta
+                    Core.shared.client.setRta(rta)
+                }.frame(width: 64, height: 40)
+                Pill(text: "RESET", style: .outline, size: 14) { confirmReset = true }.frame(width: 80, height: 40)
             }
-            EqGraphView(prefix: prefix, bands: bands, hpf: hpf, selected: $selected)
+            EqGraphView(prefix: prefix, bands: bands, hpf: hpf, selected: $selected, rtaOn: rta)
             HStack(spacing: 16) {
                 if selected == 0 {
                     ParamToggle("LOW CUT", addr: "\(prefix)/preamp/hpon", size: 16).frame(width: 120, height: 48)
@@ -302,6 +383,17 @@ struct EqPanel: View {
             .frame(height: 90)
             .background(RoundedRectangle(cornerRadius: 14).fill(C.surface))
         }
+        // El RTA de la consola muestra el canal seleccionado: lo seleccionamos y pedimos el RTA mientras el EQ esté a la vista.
+        .onAppear {
+            if selIdx >= 0 { Store.shared.set("/-stat/selidx", .i(Int32(selIdx))) }
+            Core.shared.client.setRta(rta)
+        }
+        .onDisappear { Core.shared.client.setRta(false) }
+        .confirmationDialog("¿Poner el EQ plano?", isPresented: $confirmReset, titleVisibility: .visible) {
+            Button("Resetear", role: .destructive) { EqDefaults.reset(prefix, bands: bands) }
+        } message: {
+            Text("Todas las bandas vuelven a 0 dB con su tipo, frecuencia y Q de fábrica.")
+        }
     }
 }
 
@@ -311,76 +403,164 @@ struct SendsPanel: View {
     let strip: Strip
     var body: some View {
         let c = Core.shared.console
-        var targets: [(String, Int, Int)] = []
-        for i in 0..<c.buses { targets.append(("BUS", i + 1, i + 1)) }
-        for i in 0..<c.fxSends { targets.append(("FX", i + 1, 7 + i)) }
+        var targets: [SendTarget] = []
+        for i in 0..<c.buses { targets.append(SendTarget(bus: i + 1, fx: 0)) }
+        for i in 0..<c.fxSends { targets.append(SendTarget(bus: 0, fx: i + 1)) }
         return HStack(spacing: 6) {
             ForEach(0..<targets.count, id: \.self) { k in
-                let t = targets[k]
-                let addr = "\(strip.prefix)/mix/\(Fmt.two(t.2))/level"
-                let color = t.0 == "FX" ? C.accent : C.sends
-                VStack(spacing: 4) {
-                    Text("\(t.0) \(t.1)").font(bf(14)).foregroundColor(color).padding(.top, 6)
-                    DbLabel(addr: addr, color: C.text)
-                    FaderView(addr: addr, fill: color).padding(.bottom, 8)
-                }
-                .background(RoundedRectangle(cornerRadius: 12).fill(C.surface))
+                SendColumn(strip: strip, target: targets[k])
             }
         }
+    }
+}
+
+/// Columna de un envío: nombre del bus con su color ("1-JUANCITO") o "FX1 · Hall Reverb".
+struct SendColumn: View {
+    let strip: Strip
+    let target: SendTarget
+    @ObservedObject var name: Param
+    @ObservedObject var color: Param
+    @ObservedObject var fxType: Param
+
+    init(strip: Strip, target: SendTarget) {
+        self.strip = strip
+        self.target = target
+        let isBus = target.bus > 0
+        _name = ObservedObject(wrappedValue: isBus ? Store.shared.param(Strip(kind: .bus, idx: target.bus).nameAddr) : Param("-"))
+        _color = ObservedObject(wrappedValue: isBus ? Store.shared.param(Strip(kind: .bus, idx: target.bus).colorAddr) : Param("-"))
+        _fxType = ObservedObject(wrappedValue: isBus ? Param("-") : Store.shared.param("/fx/\(target.fx)/type"))
+    }
+
+    var body: some View {
+        let mixIdx = target.bus > 0 ? target.bus : 6 + target.fx
+        let addr = "\(strip.prefix)/mix/\(Fmt.two(mixIdx))/level"
+        let col = target.bus > 0 ? BusColor.of(color.int ?? 0) : C.accent
+        let title = target.bus > 0 ? target.display(name.value?.stringValue ?? "") : Fx.label(target.fx, fxType.int)
+        VStack(spacing: 4) {
+            Text(title).font(bf(13)).foregroundColor(col).lineLimit(2).multilineTextAlignment(.center)
+                .minimumScaleFactor(0.7).frame(height: 36).padding(.top, 6).padding(.horizontal, 3)
+            DbLabel(addr: addr, color: C.text)
+            FaderView(addr: addr, fill: col).padding(.bottom, 8)
+        }
+        .background(RoundedRectangle(cornerRadius: 12).fill(C.surface))
     }
 }
 
 // MARK: EFECTOS
 
+/// FX que se está editando (se recuerda al cambiar de pestaña).
+var fxSelected = 1
+
 struct FxTypeLabel: View {
+    let n: Int
     @ObservedObject var p: Param
-    init(n: Int) { _p = ObservedObject(wrappedValue: Store.shared.param("/fx/\(n)/type")) }
+    init(n: Int) {
+        self.n = n
+        _p = ObservedObject(wrappedValue: Store.shared.param("/fx/\(n)/type"))
+    }
     var body: some View {
-        let i = p.int ?? -1
-        Text(i >= 0 && i < FX_TYPES.count ? FX_TYPES[i] : (i >= 0 ? "Efecto #\(i)" : "—"))
-            .font(bf(20)).foregroundColor(C.text).lineLimit(1).minimumScaleFactor(0.6)
+        Text(p.int.map { Fx.typeName(n, $0) } ?? "—")
+            .font(bf(16)).foregroundColor(C.text).lineLimit(1).minimumScaleFactor(0.6)
     }
 }
 
 struct EffectsView: View {
+    @State private var sel = fxSelected
     var body: some View {
         let c = Core.shared.console
-        VStack(spacing: 10) {
-            ForEach(Array(stride(from: 1, through: c.fxUnits, by: 2)), id: \.self) { n in
-                HStack(spacing: 10) {
-                    FxTile(n: n)
-                    if n + 1 <= c.fxUnits { FxTile(n: n + 1) } else { Color.clear }
+        HStack(alignment: .top, spacing: 10) {
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(1...max(c.fxUnits, 1), id: \.self) { n in
+                        Button {
+                            sel = n
+                            fxSelected = n
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("FX \(n)").font(bf(13)).foregroundColor(sel == n ? C.ink : C.accent)
+                                FxTypeLabel(n: n).colorMultiply(sel == n ? C.ink : .white)
+                            }
+                            .padding(.horizontal, 14)
+                            .frame(maxWidth: .infinity, minHeight: c.fxUnits > 4 ? 56 : 68, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(sel == n ? C.accent : C.surface2))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
-            Text("Editar parámetros y cambiar el tipo de efecto: próxima versión.").font(bf(13)).foregroundColor(C.dim)
+            .frame(width: 220)
+            FxEditor(n: sel).id(sel)
         }
         .padding(10)
         .background(C.bg)
+        .onAppear { if sel > c.fxUnits { sel = 1 } }
     }
 }
 
-struct FxTile: View {
+struct FxEditor: View {
     let n: Int
+    @ObservedObject var type: Param
+
+    init(n: Int) {
+        self.n = n
+        _type = ObservedObject(wrappedValue: Store.shared.param("/fx/\(n)/type"))
+    }
+
     var body: some View {
         let c = Core.shared.console
-        let rtn: String? = c.isX32 ? (n <= 4 ? "/fxrtn/\(Fmt.two(2 * n - 1))" : nil) : "/rtn/\(n)"
-        HStack(spacing: 12) {
-            Text("FX \(n)").font(bf(16)).foregroundColor(C.accent).frame(width: 50)
-            FxTypeLabel(n: n).frame(maxWidth: .infinity, alignment: .leading)
-            if let r = rtn {
-                VStack {
-                    KnobView(Spec(label: "RETORNO", addr: "\(r)/mix/fader", def: 0.75) { Fmt.faderDb($0) + " dB" })
-                    if !c.isX32 {
-                        KnobView(Spec(label: "SEND MASTER", addr: "/fxsend/\(n)/mix/fader", def: 0.75) { Fmt.faderDb($0) + " dB" })
+        let rtn = Fx.returnPrefix(n)
+        let abbr = type.int.flatMap { Fx.abbrOf(n, $0) }
+        let pars = Fx.params(abbr)
+        ScrollView {
+            VStack(spacing: 14) {
+                Card(title: "FX \(n)") {
+                    HStack(spacing: 14) {
+                        Menu {
+                            ForEach(Array(Fx.typeOptions(n).enumerated()), id: \.offset) { i, name in
+                                Button(name) { setType(i) }
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("EFECTO  ▾").font(bf(12)).foregroundColor(C.dim)
+                                Text(type.int.map { Fx.typeName(n, $0) } ?? "—").font(bf(18)).foregroundColor(C.text).lineLimit(1)
+                            }
+                            .padding(.horizontal, 16)
+                            .frame(width: 250, height: 58, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(C.surface2))
+                        }
+                        if let r = rtn {
+                            KnobView(Spec(label: "RETORNO", addr: "\(r)/mix/fader", def: 0.75) { Fmt.faderDb($0) + " dB" })
+                            if !c.isX32 {
+                                KnobView(Spec(label: "SEND MASTER", addr: "/fxsend/\(n)/mix/fader", def: 0.75) { Fmt.faderDb($0) + " dB" })
+                            }
+                            Spacer()
+                            ParamToggle("MUTE", addr: "\(r)/mix/on", invert: true, color: C.mute, style: .mute, size: 16).frame(width: 96, height: 50)
+                        } else {
+                            Text("insert").font(bf(14)).foregroundColor(C.dim)
+                            Spacer()
+                        }
                     }
                 }
-                ParamToggle("MUTE", addr: "\(r)/mix/on", invert: true, color: C.mute, style: .mute, size: 15).frame(width: 84, height: 46)
-            } else {
-                Text("insert").font(bf(14)).foregroundColor(C.dim).frame(width: 84)
+                Card(title: "PARÁMETROS") {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 176), spacing: 8)], alignment: .leading, spacing: 4) {
+                        ForEach(0..<pars.count, id: \.self) { i in
+                            KnobView(Fx.spec(n, i, pars[i]))
+                        }
+                    }
+                    .id(abbr ?? "?")
+                }
+                Text("Doble toque en una perilla = valor inicial. Los cambios van directo a la consola.")
+                    .font(bf(12)).foregroundColor(C.dim).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: 14).fill(C.surface))
+    }
+
+    /// Cambia el tipo y vuelve a pedir los parámetros (cambian con el tipo).
+    private func setType(_ i: Int) {
+        Store.shared.set("/fx/\(n)/type", .i(Int32(i)))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            for k in 1...64 { Store.shared.forget("/fx/\(n)/par/\(Fmt.two(k))") }
+            for k in 1...16 { Core.shared.client.query("/fx/\(n)/par/\(Fmt.two(k))") }
+        }
     }
 }

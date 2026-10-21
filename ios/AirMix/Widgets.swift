@@ -306,6 +306,7 @@ struct EqGraphView: View {
     let bands: Int
     let hpf: Bool
     @Binding var selected: Int
+    var rtaOn = false
     @StateObject private var group: ParamGroup
     @State private var dragBand = -1
 
@@ -313,10 +314,11 @@ struct EqGraphView: View {
     private static let gridLbl = ["20", "40", "60", "80", "100", "200", "300", "400", "500", "600", "800", "1k", "2k", "3k", "4k", "5k", "6k", "8k", "10k", "20k"]
     private static let dotColors: [Color] = [Color(hex: 0x2F6FD6), Color(hex: 0x1AA6A6), Color(hex: 0xC9B81E), Color(hex: 0xB01EB5), Color(hex: 0xD6731E), Color(hex: 0x3FB64A), Color(hex: 0xD63A3A)]
 
-    init(prefix: String, bands: Int, hpf: Bool, selected: Binding<Int>) {
+    init(prefix: String, bands: Int, hpf: Bool, selected: Binding<Int>, rtaOn: Bool = false) {
         self.p = prefix
         self.bands = bands
         self.hpf = hpf
+        self.rtaOn = rtaOn
         _selected = selected
         var addrs = ["\(prefix)/eq/on"]
         for b in 1...bands { for k in ["type", "f", "g", "q"] { addrs.append("\(prefix)/eq/\(b)/\(k)") } }
@@ -341,11 +343,30 @@ struct EqGraphView: View {
     var body: some View {
         GeometryReader { geo in
             let r = plotRect(geo.size)
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !rtaOn)) { _ in
             Canvas { ctx, _ in
                 _ = group.params.count
                 let xHz: (Float) -> CGFloat = { hz in r.minX + CGFloat(Fmt.logInv(20, 20000, hz)) * r.width }
                 let yDb: (Float) -> CGFloat = { db in r.minY + CGFloat(1 - (db + 15) / 30) * r.height }
                 ctx.fill(Path(r), with: .color(C.graph))
+                // RTA: 100 bandas log de 20 Hz a 20 kHz, -80..0 dB de abajo hacia arriba.
+                if rtaOn {
+                    let m = Core.shared.client.rta
+                    let n = MixerClient.rtaBins
+                    var sp = Path()
+                    sp.move(to: CGPoint(x: r.minX, y: r.maxY))
+                    for k in 0..<n {
+                        let x = r.minX + r.width * CGFloat(k) / CGFloat(n - 1)
+                        let y = r.minY + r.height * CGFloat(1 - min(max((m[k] + 80) / 80, 0), 1))
+                        sp.addLine(to: CGPoint(x: x, y: y))
+                    }
+                    sp.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+                    sp.closeSubpath()
+                    var rc = ctx
+                    rc.clip(to: Path(r))
+                    rc.fill(sp, with: .color(C.sends.opacity(0.24)))
+                    rc.stroke(sp, with: .color(C.sends.opacity(0.6)), lineWidth: 1)
+                }
                 for (k, hz) in EqGraphView.gridHz.enumerated() {
                     let x = xHz(hz)
                     ctx.fill(Path(CGRect(x: x, y: r.minY, width: 1, height: r.height)), with: .color(C.grid))
@@ -395,6 +416,7 @@ struct EqGraphView: View {
                         ctx.stroke(Path(ellipseIn: CGRect(x: d.x - rad, y: d.y - rad, width: rad * 2, height: rad * 2)), with: .color(.white), lineWidth: 2)
                     }
                 }
+            }
             }
             .contentShape(Rectangle())
             .gesture(

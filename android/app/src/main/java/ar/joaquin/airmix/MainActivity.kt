@@ -30,6 +30,7 @@ class MainActivity : Activity() {
     companion object {
         private const val REQ_SAVE = 41
         private const val REQ_OPEN = 42
+        private const val REQ_SETLIST = 43
     }
 
     private var tab = Tab.MIX
@@ -69,6 +70,7 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         prefs().getString("model", null)?.let { App.applyModel(it) }
         ShowTimer.load(prefs())
+        Setlist.load(prefs())
         if (App.client == null) App.client = MixerClient(applicationContext).also { it.start() }
         App.client?.x32 = App.console.isX32
         setContentView(buildRoot())
@@ -368,10 +370,20 @@ class MainActivity : Activity() {
         val header = row()
         header.setPadding(dp(16), 0, dp(10), 0)
         if (sendsMode) {
-            header.background = rounded(C.SENDS, 0)
+            val bg = rounded(if (sends.fx > 0) C.ACCENT else C.SENDS, 0)
+            header.background = bg
             val title = label("SENDS ON FADER  →  ${sends.display("")}", 20f, C.INK, Gravity.START or Gravity.CENTER_VERTICAL)
             val target = sends
-            target.nameAddr?.let { a -> title.bind(a) { v -> title.text = "SENDS ON FADER  →  ${target.display(v.toString())}" } }
+            if (target.bus > 0) {
+                title.bind(target.nameAddr!!) { v -> title.text = "SENDS ON FADER  →  ${target.display(v.toString())}" }
+                // El encabezado toma el color del bus.
+                title.bind(Strip(Kind.BUS, target.bus).colorAddr) { v ->
+                    bg.setColor(BusColor.of(v.asI()))
+                    title.setTextColor(BusColor.ink(v.asI()))
+                }
+            } else if (target.fx > 0) {
+                title.bind("/fx/${target.fx}/type") { v -> title.text = "SENDS ON FADER  →  ${Fx.label(target.fx, v.asI())}" }
+            }
             header.addView(title, lp(0, MATCH, 1f))
             val change = Btn(this, "CAMBIAR ▾", BtnStyle.LIGHT, 15f)
             change.setOnClickListener { showSendsPopup(change) }
@@ -423,9 +435,22 @@ class MainActivity : Activity() {
             b.maxLines = 1
             b.ellipsize = android.text.TextUtils.TruncateAt.END
             b.setPadding(dp(8), 0, dp(8), 0)
-            t.nameAddr?.let { a -> b.bind(a) { v -> b.text = t.display(v.toString()) } }
             b.activeColor = if (t.fx > 0) C.ACCENT else C.SENDS
             b.active = t == sends
+            if (t.bus > 0) {
+                b.bind(t.nameAddr!!) { v -> b.text = t.display(v.toString()) }
+                // Color del bus: texto de ese color; si está elegido, fondo de ese color.
+                b.bind(Strip(Kind.BUS, t.bus).colorAddr) { v ->
+                    b.activeColor = BusColor.of(v.asI())
+                    b.refresh()
+                    if (!b.active) b.setTextColor(BusColor.of(v.asI()))
+                    else if (BusColor.ink(v.asI()) != C.INK) b.setTextColor(BusColor.ink(v.asI()))
+                }
+            } else if (t.fx > 0) {
+                b.maxLines = 2
+                b.textSize = 14f
+                b.bind("/fx/${t.fx}/type") { v -> b.text = Fx.label(t.fx, v.asI()) }
+            }
             b.setOnClickListener {
                 sends = t
                 pw.dismiss()
@@ -583,6 +608,15 @@ class MainActivity : Activity() {
 
     private val saveNotes = Runnable { prefs().edit().putString("notes", notesEdit.text.toString()).apply() }
 
+    private var notesTab = 0 // 0 = NOTAS, 1 = TEMAS
+    private lateinit var notesBody: FrameLayout
+    private lateinit var notesBox: View
+    private lateinit var songsBox: View
+    private lateinit var songsList: LinearLayout
+    private lateinit var songsSource: TextView
+    private val notesActions = ArrayList<View>()
+    private val notesTabs = ArrayList<Btn>()
+
     private fun buildNotes(): View {
         val panel = col()
         panel.background = rounded(C.SURFACE, 16, C.LINE)
@@ -591,11 +625,17 @@ class MainActivity : Activity() {
         panel.elevation = dp(12).toFloat()
 
         val head = row()
-        head.addView(label("NOTAS", 18f, C.TEXT, Gravity.START or Gravity.CENTER_VERTICAL), lp(0, dp(44), 1f))
-        val mark = Btn(this, "+ MARCA", BtnStyle.LIGHT, 15f)
+        for ((i, t) in listOf("NOTAS", "TEMAS").withIndex()) {
+            val b = Btn(this, t, BtnStyle.TAB, 16f)
+            b.setOnClickListener { showNotesTab(i) }
+            notesTabs.add(b)
+            head.addView(b, lp(dp(86), dp(40)).m(r = dp(6)))
+        }
+        head.addView(View(this), lp(0, 1, 1f))
+        val mark = Btn(this, "+ MARCA", BtnStyle.LIGHT, 14f)
         mark.setOnClickListener { insertMark() }
-        head.addView(mark, lp(dp(100), dp(40)).m(r = dp(8)))
-        val clear = Btn(this, "BORRAR", BtnStyle.OUTLINE, 14f)
+        head.addView(mark, lp(dp(84), dp(40)).m(r = dp(6)))
+        val clear = Btn(this, "BORRAR", BtnStyle.OUTLINE, 13f)
         clear.setOnClickListener {
             AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setMessage("¿Borrar todas las notas?")
@@ -604,10 +644,12 @@ class MainActivity : Activity() {
                 .setOnDismissListener { hideBars() }
                 .show()
         }
-        head.addView(clear, lp(dp(84), dp(40)).m(r = dp(8)))
+        head.addView(clear, lp(dp(72), dp(40)).m(r = dp(6)))
+        notesActions.add(mark)
+        notesActions.add(clear)
         val close = Btn(this, "✕", BtnStyle.OUTLINE, 16f)
         close.setOnClickListener { toggleNotes() }
-        head.addView(close, lp(dp(44), dp(40)))
+        head.addView(close, lp(dp(42), dp(40)))
         panel.addView(head)
 
         notesEdit = EditText(this)
@@ -628,11 +670,211 @@ class MainActivity : Activity() {
                 handler.postDelayed(saveNotes, 700)
             }
         })
-        panel.addView(notesEdit, lp(MATCH, 0, 1f).m(t = dp(8)))
+        notesBox = notesEdit
+        songsBox = buildSongs()
+        notesBody = FrameLayout(this)
+        notesBody.addView(notesBox, FrameLayout.LayoutParams(MATCH, MATCH))
+        notesBody.addView(songsBox, FrameLayout.LayoutParams(MATCH, MATCH))
+        panel.addView(notesBody, lp(MATCH, 0, 1f).m(t = dp(8)))
+        showNotesTab(notesTab)
         val wrap = FrameLayout(this)
         wrap.setPadding(dp(8), dp(8), dp(8), dp(8))
         wrap.addView(panel, FrameLayout.LayoutParams(MATCH, MATCH))
         return wrap
+    }
+
+    private fun showNotesTab(i: Int) {
+        notesTab = i
+        for (k in notesTabs.indices) notesTabs[k].active = k == i
+        notesBox.visibility = if (i == 0) View.VISIBLE else View.GONE
+        songsBox.visibility = if (i == 1) View.VISIBLE else View.GONE
+        for (a in notesActions) a.visibility = if (i == 0) View.VISIBLE else View.GONE
+        if (i == 1) {
+            notesEdit.clearFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.hideSoftInputFromWindow(notesEdit.windowToken, 0)
+        }
+    }
+
+    // ------------------------------------------------------------------ TEMAS (lista de temas)
+
+    private fun buildSongs(): View {
+        val box = col()
+        val tools = row()
+        val load = Btn(this, "CARGAR ARCHIVO…", BtnStyle.LIGHT, 14f)
+        load.setOnClickListener { openSetlistFile() }
+        tools.addView(load, lp(0, dp(42), 1.4f).m(r = dp(6)))
+        val add = Btn(this, "+ TEMA", BtnStyle.LIGHT, 14f)
+        add.setOnClickListener { editSong(-1) }
+        tools.addView(add, lp(0, dp(42), 1f).m(r = dp(6)))
+        val empty = Btn(this, "VACIAR", BtnStyle.OUTLINE, 13f)
+        empty.setOnClickListener {
+            if (Setlist.songs.isEmpty()) return@setOnClickListener
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setMessage("¿Vaciar la lista de temas?")
+                .setPositiveButton("Vaciar") { _, _ ->
+                    Setlist.songs.clear()
+                    Setlist.current = -1
+                    Setlist.source = ""
+                    songsChanged()
+                }
+                .setNegativeButton("Cancelar", null)
+                .setOnDismissListener { hideBars() }
+                .show()
+        }
+        tools.addView(empty, lp(0, dp(42), 0.8f))
+        box.addView(tools)
+        songsSource = label("", 12f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL)
+        box.addView(songsSource, lp(MATCH, dp(22)).m(t = dp(4)))
+        songsList = col()
+        val sv = ScrollView(this)
+        sv.isVerticalScrollBarEnabled = false
+        sv.addView(songsList, FrameLayout.LayoutParams(MATCH, WRAP))
+        box.addView(sv, lp(MATCH, 0, 1f))
+        val nav = row()
+        val prev = Btn(this, "◀  ANTERIOR", BtnStyle.OUTLINE, 15f)
+        prev.setOnClickListener { stepSong(-1) }
+        nav.addView(prev, lp(0, dp(48), 1f).m(r = dp(6)))
+        val next = Btn(this, "SIGUIENTE  ▶", BtnStyle.LIGHT, 15f)
+        next.activeColor = C.ACCENT
+        next.active = true
+        next.setOnClickListener { stepSong(1) }
+        nav.addView(next, lp(0, dp(48), 1f))
+        box.addView(nav, lp(MATCH, WRAP).m(t = dp(8)))
+        renderSongs()
+        return box
+    }
+
+    private fun songsChanged() {
+        Setlist.save(prefs())
+        renderSongs()
+    }
+
+    private fun stepSong(dir: Int) {
+        val n = Setlist.songs.size
+        if (n == 0) return
+        Setlist.current = when {
+            Setlist.current < 0 -> if (dir > 0) 0 else n - 1
+            else -> (Setlist.current + dir).coerceIn(0, n - 1)
+        }
+        songsChanged()
+    }
+
+    private fun renderSongs() {
+        songsList.removeAllViews()
+        val n = Setlist.songs.size
+        songsSource.text = when {
+            n == 0 -> "Sin temas. Cargá un .txt / .doc / .docx (un tema por línea) o agregalos a mano."
+            Setlist.source.isNotEmpty() -> "$n temas · ${Setlist.source}"
+            else -> "$n temas"
+        }
+        songsSource.maxLines = 2
+        Setlist.songs.forEachIndexed { i, s ->
+            val cur = i == Setlist.current
+            val r = row()
+            r.background = rounded(if (cur) C.SURFACE2 else C.BG, 10, if (cur) C.ACCENT else 0)
+            r.setPadding(dp(8), dp(4), dp(4), dp(4))
+            r.addView(label("${i + 1}", 15f, if (cur) C.ACCENT else C.TEXT_DIM), lp(dp(30), MATCH))
+            val txt = col()
+            val t = label(s.title, 16f, if (cur) C.TEXT else C.TEXT, Gravity.START or Gravity.CENTER_VERTICAL)
+            t.maxLines = 2
+            txt.addView(t, lp(MATCH, WRAP))
+            if (s.note.isNotEmpty()) {
+                val nt = label(s.note, 13f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL)
+                nt.typeface = FONT_MEDIUM
+                nt.maxLines = 3
+                txt.addView(nt, lp(MATCH, WRAP).m(t = dp(2)))
+            }
+            txt.isClickable = true
+            txt.setOnClickListener {
+                Setlist.current = if (cur) -1 else i
+                songsChanged()
+            }
+            r.addView(txt, lp(0, WRAP, 1f).m(l = dp(4), r = dp(4)))
+            for ((sym, act) in listOf<Pair<String, () -> Unit>>(
+                "▲" to { Setlist.move(i, -1); songsChanged() },
+                "▼" to { Setlist.move(i, 1); songsChanged() },
+                "✎" to { editSong(i) },
+                "✕" to { Setlist.remove(i); songsChanged() }
+            )) {
+                val b = Btn(this, sym, BtnStyle.SMALL, 14f)
+                b.setOnClickListener { act() }
+                r.addView(b, lp(dp(34), dp(36)).m(l = dp(3)))
+            }
+            songsList.addView(r, lp(MATCH, WRAP).m(t = dp(6)))
+        }
+    }
+
+    /** Editar (i >= 0) o agregar (i = -1) un tema. */
+    private fun editSong(i: Int) {
+        val s = Setlist.songs.getOrNull(i)
+        val box = col()
+        box.setPadding(dp(24), dp(8), dp(24), 0)
+        val title = EditText(this)
+        title.hint = "Tema"
+        title.setSingleLine()
+        title.setTextColor(Color.WHITE)
+        title.setText(s?.title ?: "")
+        box.addView(title, lp(MATCH, WRAP))
+        val note = EditText(this)
+        note.hint = "Nota (tono, quién arranca, cambios…)"
+        note.setTextColor(Color.WHITE)
+        note.setText(s?.note ?: "")
+        box.addView(note, lp(MATCH, WRAP).m(t = dp(8)))
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(if (s == null) "Agregar tema" else "Editar tema")
+            .setView(box)
+            .setPositiveButton("Guardar") { _, _ ->
+                val t = title.text.toString().trim()
+                if (t.isEmpty()) return@setPositiveButton
+                if (s == null) Setlist.songs.add(Song(t, note.text.toString().trim()))
+                else {
+                    s.title = t
+                    s.note = note.text.toString().trim()
+                }
+                songsChanged()
+            }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun openSetlistFile() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("*/*")
+            .putExtra(
+                Intent.EXTRA_MIME_TYPES, arrayOf(
+                    "text/plain", "text/rtf", "application/rtf", "application/msword",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/octet-stream"
+                )
+            )
+        try { startActivityForResult(i, REQ_SETLIST) } catch (_: Exception) {}
+    }
+
+    private fun onSetlistFile(bytes: ByteArray, display: String) {
+        val text = DocText.extract(bytes)
+        val list = text?.let { Setlist.parse(it) } ?: emptyList()
+        if (list.isEmpty()) {
+            Toast.makeText(this, "No encontré temas en ese archivo. Probá con un .txt o .docx, un tema por línea.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val apply = {
+            Setlist.songs.clear()
+            Setlist.songs.addAll(list)
+            Setlist.current = -1
+            Setlist.source = display
+            songsChanged()
+            Toast.makeText(this, "${list.size} temas cargados", Toast.LENGTH_SHORT).show()
+        }
+        if (Setlist.songs.isEmpty()) apply()
+        else AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setMessage("¿Reemplazar la lista actual (${Setlist.songs.size} temas) por los ${list.size} de \"$display\"?")
+            .setPositiveButton("Reemplazar") { _, _ -> apply() }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
     }
 
     private fun toggleNotes() {
@@ -804,6 +1046,15 @@ class MainActivity : Activity() {
         try { startActivityForResult(i, REQ_OPEN) } catch (_: Exception) {}
     }
 
+    private fun displayName(uri: android.net.Uri): String {
+        try {
+            contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) return c.getString(0) ?: ""
+            }
+        } catch (_: Exception) {}
+        return (uri.lastPathSegment ?: "").substringAfterLast('/').substringAfterLast(':')
+    }
+
     @Deprecated("Activity API")
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -812,7 +1063,10 @@ class MainActivity : Activity() {
         val uri = data?.data
         if (resultCode != RESULT_OK || uri == null) return
         try {
-            if (requestCode == REQ_SAVE) {
+            if (requestCode == REQ_SETLIST) {
+                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
+                onSetlistFile(bytes, displayName(uri))
+            } else if (requestCode == REQ_SAVE) {
                 val text = pendingExport ?: return
                 contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.ISO_8859_1)) }
                 pendingExport = null

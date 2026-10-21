@@ -154,7 +154,7 @@ struct ContentView: View {
         return VStack(spacing: 0) {
             HStack(spacing: 10) {
                 if sends != .main {
-                    SendTargetName(target: sends, prefix: "SENDS ON FADER  →  ").font(bf(compact ? 15 : 20)).foregroundColor(C.ink)
+                    SendTargetName(target: sends, prefix: "SENDS ON FADER  →  ", inkOnColor: true).font(bf(compact ? 15 : 20))
                     Spacer()
                     sendsMenu(label: "CAMBIAR ▾", dark: true)
                     Button { sends = .main } label: {
@@ -169,7 +169,7 @@ struct ContentView: View {
             }
             .padding(.horizontal, 16)
             .frame(height: compact ? 46 : 54)
-            .background(sends != .main ? C.sends : C.panel)
+            .background(SendTargetBackground(target: sends))
 
             HStack(spacing: 4) {
                 if compact {
@@ -257,18 +257,44 @@ struct ContentView: View {
     }
 }
 
-/// "1-JUANCITO": número de bus + nombre que tiene en la consola.
+/// "1-JUANCITO" (número de bus + nombre de la consola) o "FX1 · Hall Reverb" (efecto cargado).
 struct SendTargetName: View {
     let target: SendTarget
     var prefix = ""
+    var inkOnColor = false
     @ObservedObject var name: Param
-    init(target: SendTarget, prefix: String = "") {
+    @ObservedObject var color: Param
+    init(target: SendTarget, prefix: String = "", inkOnColor: Bool = false) {
         self.target = target
         self.prefix = prefix
-        _name = ObservedObject(wrappedValue: target.nameAddr.map { Store.shared.param($0) } ?? Param("-"))
+        self.inkOnColor = inkOnColor
+        if target.fx > 0 {
+            _name = ObservedObject(wrappedValue: Store.shared.param("/fx/\(target.fx)/type"))
+        } else {
+            _name = ObservedObject(wrappedValue: target.nameAddr.map { Store.shared.param($0) } ?? Param("-"))
+        }
+        _color = ObservedObject(wrappedValue: target.bus > 0 ? Store.shared.param(Strip(kind: .bus, idx: target.bus).colorAddr) : Param("-"))
     }
     var body: some View {
-        Text(prefix + target.display(name.value?.stringValue ?? ""))
+        let t = target.fx > 0 ? Fx.label(target.fx, name.int) : target.display(name.value?.stringValue ?? "")
+        if inkOnColor {
+            Text(prefix + t).foregroundColor(target.bus > 0 ? BusColor.ink(color.int ?? 0) : C.ink)
+        } else {
+            Text(prefix + t)
+        }
+    }
+}
+
+/// Fondo del encabezado: color del bus en "sends on fader", naranja para FX, panel normal en MAIN.
+struct SendTargetBackground: View {
+    let target: SendTarget
+    @ObservedObject var color: Param
+    init(target: SendTarget) {
+        self.target = target
+        _color = ObservedObject(wrappedValue: target.bus > 0 ? Store.shared.param(Strip(kind: .bus, idx: target.bus).colorAddr) : Param("-"))
+    }
+    var body: some View {
+        if target.bus > 0 { BusColor.of(color.int ?? 0) } else if target.fx > 0 { C.accent } else { C.panel }
     }
 }
 
@@ -329,23 +355,31 @@ struct FxMuteButton: View {
 struct NotesPanel: View {
     let close: () -> Void
     @AppStorage("notes") private var notes = ""
+    @AppStorage("notesTab") private var tab = 0
     @State private var confirmClear = false
 
     var body: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Text("NOTAS").font(bf(18)).foregroundColor(C.text)
+            HStack(spacing: 6) {
+                Pill(text: "NOTAS", active: tab == 0, style: .tab, size: 15) { tab = 0 }.frame(width: 80, height: 38)
+                Pill(text: "TEMAS", active: tab == 1, style: .tab, size: 15) { tab = 1 }.frame(width: 80, height: 38)
                 Spacer()
-                Pill(text: "+ MARCA", size: 14) { mark() }.frame(width: 96, height: 38)
-                Pill(text: "BORRAR", style: .outline, size: 13) { confirmClear = true }.frame(width: 80, height: 38)
-                Pill(text: "✕", style: .outline, size: 15, action: close).frame(width: 42, height: 38)
+                if tab == 0 {
+                    Pill(text: "+ MARCA", size: 13) { mark() }.frame(width: 82, height: 38)
+                    Pill(text: "BORRAR", style: .outline, size: 12) { confirmClear = true }.frame(width: 70, height: 38)
+                }
+                Pill(text: "✕", style: .outline, size: 15, action: close).frame(width: 40, height: 38)
             }
-            TextEditor(text: $notes)
-                .font(.system(size: 17))
-                .foregroundColor(C.text)
-                .scrollContentBackground(.hidden)
-                .padding(8)
-                .background(RoundedRectangle(cornerRadius: 12).fill(C.bg))
+            if tab == 0 {
+                TextEditor(text: $notes)
+                    .font(.system(size: 17))
+                    .foregroundColor(C.text)
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(C.bg))
+            } else {
+                SongsView()
+            }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 16).fill(C.surface))
@@ -369,6 +403,145 @@ struct NotesPanel: View {
         }
         if !notes.isEmpty && !notes.hasSuffix("\n") { notes += "\n" }
         notes += "[\(stamp)] "
+    }
+}
+
+/// Pestaña TEMAS: lista de temas editable, cargable desde .txt / .docx / .doc / .rtf.
+struct SongsView: View {
+    @ObservedObject private var list = Setlist.shared
+    @State private var importing = false
+    @State private var editing: Int?        // índice a editar; -1 = nuevo
+    @State private var editTitle = ""
+    @State private var editNote = ""
+    @State private var pending: [Song] = []
+    @State private var pendingName = ""
+    @State private var confirmReplace = false
+    @State private var confirmEmpty = false
+    @State private var error = ""
+
+    private static let types: [UTType] = [
+        .plainText, .rtf, UTType("org.openxmlformats.wordprocessingml.document") ?? .data,
+        UTType("com.microsoft.word.doc") ?? .data, .data
+    ]
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Pill(text: "CARGAR ARCHIVO…", size: 13) { importing = true }.frame(height: 40)
+                Pill(text: "+ TEMA", size: 13) { startEdit(-1) }.frame(height: 40)
+                Pill(text: "VACIAR", style: .outline, size: 12) { if !list.songs.isEmpty { confirmEmpty = true } }.frame(width: 76, height: 40)
+            }
+            Text(info).font(bf(11)).foregroundColor(error.isEmpty ? C.dim : C.red).lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(Array(list.songs.enumerated()), id: \.element.id) { i, s in
+                        row(i, s)
+                    }
+                }
+            }
+            HStack(spacing: 6) {
+                Pill(text: "◀  ANTERIOR", style: .outline, size: 14) { list.step(-1) }.frame(height: 46)
+                Pill(text: "SIGUIENTE  ▶", active: true, size: 14) { list.step(1) }.frame(height: 46)
+            }
+        }
+        .fileImporter(isPresented: $importing, allowedContentTypes: SongsView.types) { result in
+            guard case .success(let url) = result else { return }
+            let ok = url.startAccessingSecurityScopedResource()
+            defer { if ok { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url) else { error = "No se pudo leer el archivo."; return }
+            let songs = DocText.extract(data).map { Setlist.parse($0) } ?? []
+            if songs.isEmpty { error = "No encontré temas en ese archivo. Probá con un .txt o .docx, un tema por línea."; return }
+            error = ""
+            pending = songs
+            pendingName = url.lastPathComponent
+            if list.songs.isEmpty { applyPending() } else { confirmReplace = true }
+        }
+        .confirmationDialog("¿Reemplazar la lista actual (\(list.songs.count) temas) por los \(pending.count) de \"\(pendingName)\"?",
+                            isPresented: $confirmReplace, titleVisibility: .visible) {
+            Button("Reemplazar", role: .destructive) { applyPending() }
+        }
+        .confirmationDialog("¿Vaciar la lista de temas?", isPresented: $confirmEmpty, titleVisibility: .visible) {
+            Button("Vaciar", role: .destructive) {
+                list.songs = []
+                list.current = -1
+                list.source = ""
+                list.save()
+            }
+        }
+        .alert(editing == -1 ? "Agregar tema" : "Editar tema", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
+            TextField("Tema", text: $editTitle)
+            TextField("Nota (tono, quién arranca, cambios…)", text: $editNote)
+            Button("Guardar") { saveEdit() }
+            Button("Cancelar", role: .cancel) { editing = nil }
+        }
+    }
+
+    private var info: String {
+        if !error.isEmpty { return error }
+        let n = list.songs.count
+        if n == 0 { return "Sin temas. Cargá un .txt / .doc / .docx (un tema por línea) o agregalos a mano." }
+        return list.source.isEmpty ? "\(n) temas" : "\(n) temas · \(list.source)"
+    }
+
+    private func row(_ i: Int, _ s: Song) -> some View {
+        let cur = i == list.current
+        return HStack(spacing: 4) {
+            Text("\(i + 1)").font(bf(15)).foregroundColor(cur ? C.accent : C.dim).frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(s.title).font(bf(16)).foregroundColor(C.text).lineLimit(2)
+                if !s.note.isEmpty {
+                    Text(s.note).font(.system(size: 13, weight: .medium)).foregroundColor(C.dim).lineLimit(3)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                list.current = cur ? -1 : i
+                list.save()
+            }
+            Pill(text: "▲", style: .small, size: 13) { list.move(i, -1) }.frame(width: 32, height: 34)
+            Pill(text: "▼", style: .small, size: 13) { list.move(i, 1) }.frame(width: 32, height: 34)
+            Pill(text: "✎", style: .small, size: 13) { startEdit(i) }.frame(width: 32, height: 34)
+            Pill(text: "✕", style: .small, size: 13) { list.remove(i) }.frame(width: 32, height: 34)
+        }
+        .padding(.vertical, 4)
+        .padding(.leading, 6)
+        .padding(.trailing, 4)
+        .background(RoundedRectangle(cornerRadius: 10).fill(cur ? C.surface2 : C.bg))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(cur ? C.accent : Color.clear))
+    }
+
+    private func startEdit(_ i: Int) {
+        if i >= 0 && i < list.songs.count {
+            editTitle = list.songs[i].title
+            editNote = list.songs[i].note
+        } else {
+            editTitle = ""
+            editNote = ""
+        }
+        editing = i
+    }
+
+    private func saveEdit() {
+        let t = editTitle.trimmingCharacters(in: .whitespaces)
+        defer { editing = nil }
+        guard !t.isEmpty, let i = editing else { return }
+        let n = editNote.trimmingCharacters(in: .whitespaces)
+        if i >= 0 && i < list.songs.count {
+            list.songs[i].title = t
+            list.songs[i].note = n
+        } else {
+            list.songs.append(Song(title: t, note: n))
+        }
+        list.save()
+    }
+
+    private func applyPending() {
+        list.songs = pending
+        list.current = -1
+        list.source = pendingName
+        list.save()
     }
 }
 

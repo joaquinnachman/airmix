@@ -57,6 +57,13 @@ final class Store {
         Core.shared.client.query(a)
     }
 
+    /// Olvida el valor local (para pedirlo de nuevo y verificar qué tiene la consola).
+    func forget(_ a: String) {
+        guard let p = params[a] else { return }
+        p.touched = 0
+        p.value = nil
+    }
+
     func requeryWanted() {
         for (k, p) in params where p.wanted { Core.shared.client.query(k) }
     }

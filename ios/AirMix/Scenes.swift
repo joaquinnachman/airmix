@@ -326,13 +326,7 @@ final class Scenes: ObservableObject {
     static let filterTypes = ["LC6", "LC12", "HC6", "HC12", "1.0", "2.0", "3.0", "5.0", "10.0"]
     static let ratios = ["1.1", "1.3", "1.5", "2.0", "2.5", "3.0", "4.0", "5.0", "7.0", "10", "20", "100"]
     static let eqTypes = ["LCut", "LShv", "PEQ", "VEQ", "HShv", "HCut"]
-    static let fxAbbr = [
-        "HALL", "AMBI", "RPLT", "ROOM", "CHAM", "PLAT", "VREV", "VRM", "GATE", "RVRS", "DLY", "3TAP", "4TAP",
-        "CRS", "FLNG", "PHAS", "DIMC", "FILT", "ROTA", "PAN", "SUB", "D/RV", "CR/R", "FL/R", "D/CR", "D/FL",
-        "MODD", "GEQ2", "GEQ", "TEQ2", "TEQ", "DES2", "DES", "P1A", "P1A2", "PQ5", "PQ5S", "WAVD", "LIM",
-        "CMB", "CMB2", "FAC", "FAC1M", "FAC2", "LEC", "LEC2", "ULC", "ULC2", "ENH2", "ENH", "EXC2", "EXC",
-        "IMG", "EDI", "SON", "AMP2", "AMP", "DRV2", "DRV", "PIT2", "PIT"
-    ]
+    static var fxAbbr: [String] { Fx.abbr }
     static let xairGateModes = ["GATE", "EXP2", "EXP3", "EXP4", "DUCK"]
     static let x32GateModes = ["EXP2", "EXP3", "EXP4", "GATE", "DUCK"]
     static let xairKeySrc: [String] = ["SELF"] + (1...16).map { "Ch" + Fmt.two($0) } + (1...6).map { "Bus\($0)" }
