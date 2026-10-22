@@ -53,6 +53,7 @@ class MainActivity : Activity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var connected = false
+    private var requeryTick = 0
     private var ticking = false
     private val tick = object : Runnable {
         override fun run() {
@@ -166,6 +167,10 @@ class MainActivity : Activity() {
             }
         }
         if (connected) for (v in App.meterViews) v.invalidate()
+        if (connected && ++requeryTick >= 45) {
+            requeryTick = 0
+            App.store.requeryMissing()
+        }
         updateTimer()
     }
 

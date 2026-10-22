@@ -13,8 +13,8 @@ targets:
       path: AirMix/Info.plist
       properties:
         CFBundleDisplayName: AirMix
-        CFBundleShortVersionString: "0.4.3"
-        CFBundleVersion: "8"
+        CFBundleShortVersionString: "0.4.4"
+        CFBundleVersion: "9"
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UIStatusBarHidden: true

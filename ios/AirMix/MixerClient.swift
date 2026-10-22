@@ -350,7 +350,7 @@ final class MixerClient {
                 lock.unlock()
                 guard let d = data, let ip = h else { continue }
                 sendToMixer(d, ip)
-                if key.hasSuffix("?") { usleep(1000) }
+                if key.hasSuffix("?") { usleep(2000) }
             }
         }
     }

@@ -82,11 +82,16 @@ struct ConfigPanel: View {
     @State private var nameFailed = false
     @FocusState private var editing: Bool
 
+    @ObservedObject var srcP: Param
+
     init(strip: Strip) {
         self.strip = strip
         _nameP = ObservedObject(wrappedValue: Store.shared.param(strip.nameAddr))
         _colorP = ObservedObject(wrappedValue: Store.shared.param(strip.colorAddr))
+        _srcP = ObservedObject(wrappedValue: strip.kind == .ch ? Store.shared.param(strip.sourceAddr) : Param("-"))
     }
+
+    private var headamp: String? { srcP.int.flatMap { strip.headampFor($0) } }
 
     private let colorNames = ["Apagado", "Rojo", "Verde", "Amarillo", "Azul", "Magenta", "Cian", "Blanco",
                               "Apagado inv.", "Rojo inv.", "Verde inv.", "Amarillo inv.", "Azul inv.", "Magenta inv.", "Cian inv.", "Blanco inv."]
@@ -130,9 +135,15 @@ struct ConfigPanel: View {
                 let p = strip.prefix
                 Card(title: "PREAMP") {
                     SourceLabel(addr: strip.sourceAddr, x32: c.isX32)
+                    if let ha = headamp {
+                        GainInfo(addr: "\(ha)/gain", ha: ha).id(ha)
+                    }
                     HStack {
-                        if let ha = strip.headampAddr {
-                            KnobView(Spec(label: "GAIN", addr: "\(ha)/gain", def: 12 / 72) { Fmt.db(Fmt.lin(-12, 60, $0)) })
+                        // GAIN y 48V dependen de la fuente del canal.
+                        if let ha = headamp {
+                            KnobView(Spec(label: "GAIN", addr: "\(ha)/gain", def: 12 / 72) { Fmt.db(Fmt.lin(-12, 60, $0)) }).id(ha)
+                        } else if srcP.value != nil {
+                            Text("SIN PREAMP\n(fuente sin ganancia)").font(bf(13)).foregroundColor(C.dim).frame(width: 176, height: 70)
                         }
                         if c.isX32 {
                             KnobView(Spec(label: "TRIM", addr: "\(p)/preamp/trim", def: 0.5, bipolar: true) { Fmt.db(Fmt.lin(-18, 18, $0)) })
@@ -141,8 +152,8 @@ struct ConfigPanel: View {
                     }
                     HStack(spacing: 10) {
                         ParamToggle("LOW CUT", addr: "\(p)/preamp/hpon", size: 16).frame(width: 110, height: 48)
-                        if let ha = strip.headampAddr {
-                            ParamToggle("48V", addr: "\(ha)/phantom", color: C.mute, size: 16).frame(width: 90, height: 48)
+                        if let ha = headamp {
+                            ParamToggle("48V", addr: "\(ha)/phantom", color: C.mute, size: 16).frame(width: 90, height: 48).id(ha)
                         }
                         ParamToggle("Ø PHASE", addr: "\(p)/preamp/invert", size: 16).frame(width: 110, height: 48)
                         ParamToggle("MAIN LR", addr: strip.lrAssignAddr, size: 16).frame(width: 120, height: 48)
@@ -217,6 +228,23 @@ struct ColorSwatch: View {
             .frame(width: 52, height: 38)
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Diagnóstico del preamp: qué dirección se usa y si la consola contesta.
+struct GainInfo: View {
+    let ha: String
+    @ObservedObject var p: Param
+    @State private var timedOut = false
+    init(addr: String, ha: String) {
+        self.ha = ha
+        _p = ObservedObject(wrappedValue: Store.shared.param(addr))
+    }
+    var body: some View {
+        let bad = timedOut && p.value == nil
+        Text(bad ? "Preamp: \(ha) · la consola no responde" : "Preamp: \(ha)")
+            .font(bf(11)).foregroundColor(bad ? C.solo : C.dim)
+            .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { timedOut = true } }
     }
 }
 

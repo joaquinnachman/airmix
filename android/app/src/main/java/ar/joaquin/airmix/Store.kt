@@ -36,6 +36,7 @@ class Store {
     private val values = HashMap<String, Any>()
     private val listeners = HashMap<String, ArrayList<(Any) -> Unit>>()
     private val touched = HashMap<String, Long>()
+    private val attempts = HashMap<String, Int>()
 
     fun get(addr: String): Any? = values[addr]
     fun float(addr: String, def: Float = 0f): Float = (values[addr] as? Number)?.toFloat() ?: def
@@ -74,15 +75,34 @@ class Store {
         for (k in listeners.keys) c.query(k)
     }
 
+    /**
+     * Reintento de pedidos sin respuesta (UDP puede perder paquetes, sobre todo cuando una pantalla
+     * pide muchas direcciones juntas). Se llama cada ~1,5 s; hasta 6 intentos por dirección.
+     */
+    fun requeryMissing(max: Int = 48) {
+        val c = App.client ?: return
+        var n = 0
+        for (k in listeners.keys) {
+            if (values[k] != null) continue
+            val a = attempts[k] ?: 0
+            if (a >= 6) continue
+            attempts[k] = a + 1
+            c.query(k)
+            if (++n >= max) break
+        }
+    }
+
     /** Olvida el valor local (para pedirlo de nuevo y verificar qué tiene la consola). */
     fun forget(addr: String) {
         values.remove(addr)
         touched.remove(addr)
+        attempts.remove(addr)
     }
 
     fun resetValues() {
         values.clear()
         touched.clear()
+        attempts.clear()
     }
 
     private fun notify(addr: String, v: Any) {

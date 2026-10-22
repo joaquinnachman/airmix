@@ -185,16 +185,19 @@ data class Strip(val kind: Kind, val idx: Int = 1) {
         else -> null
     }
 
-    /** Preamp físico del canal (si lo tiene). */
-    val headampAddr: String?
-        get() {
-            if (kind != Kind.CH) return null
-            return if (c.isX32) {
-                if (idx <= 32) "/headamp/" + String.format(Locale.US, "%03d", idx - 1) else null
-            } else {
-                if (idx <= c.headamps) "/headamp/${Fmt.two(idx)}" else null
-            }
+    /**
+     * Preamp que alimenta al canal según su FUENTE (no según el número de canal):
+     * X Air: insrc 0-15 = entradas 1-16 -> /headamp/01..16 (17+ = AUX / USB, sin preamp).
+     * X32: source 1-128 = local + AES50 -> /headamp/000..127 (0 = OFF, 129+ = tarjeta / aux, sin preamp).
+     */
+    fun headampFor(src: Int): String? {
+        if (kind != Kind.CH) return null
+        return if (c.isX32) {
+            if (src in 1..128) "/headamp/" + String.format(Locale.US, "%03d", src - 1) else null
+        } else {
+            if (src in 0..15) "/headamp/${Fmt.two(src + 1)}" else null
         }
+    }
 
     val sourceAddr: String get() = if (c.isX32) "$prefix/config/source" else "$prefix/config/insrc"
 }

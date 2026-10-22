@@ -11,8 +11,8 @@ android {
         applicationId = "ar.joaquin.airmix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.4.3"
+        versionCode = 9
+        versionName = "0.4.4"
     }
 
     buildTypes {

@@ -275,7 +275,7 @@ class MixerClient(private val ctx: Context) {
             val bytes = pending.remove(key) ?: continue
             val h = host ?: continue
             sendToMixer(bytes, h)
-            if (key.endsWith("?")) SystemClock.sleep(1) // no saturar la consola con pedidos
+            if (key.endsWith("?")) SystemClock.sleep(2) // no saturar la consola con pedidos
         }
     }
 

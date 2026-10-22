@@ -182,10 +182,12 @@ struct Strip: Equatable, Hashable {
         return nil
     }
 
-    var headampAddr: String? {
+    /// Preamp que alimenta al canal según su FUENTE (no según el número de canal). Igual que headampFor en Android:
+    /// X Air insrc 0-15 -> /headamp/01..16; X32 source 1-128 -> /headamp/000..127; el resto no tiene preamp.
+    func headampFor(_ src: Int) -> String? {
         guard kind == .ch else { return nil }
-        if c.isX32 { return idx <= 32 ? "/headamp/" + String(format: "%03d", idx - 1) : nil }
-        return idx <= c.headamps ? "/headamp/\(Fmt.two(idx))" : nil
+        if c.isX32 { return (1...128).contains(src) ? "/headamp/" + String(format: "%03d", src - 1) : nil }
+        return (0...15).contains(src) ? "/headamp/\(Fmt.two(src + 1))" : nil
     }
 
     static func == (a: Strip, b: Strip) -> Bool { a.kind == b.kind && a.idx == b.idx }

@@ -59,9 +59,24 @@ final class Store {
 
     /// Olvida el valor local (para pedirlo de nuevo y verificar qué tiene la consola).
     func forget(_ a: String) {
+        attempts[a] = nil
         guard let p = params[a] else { return }
         p.touched = 0
         p.value = nil
+    }
+
+    /// Reintento de pedidos sin respuesta (UDP puede perder paquetes). Cada ~1,5 s; hasta 6 intentos por dirección.
+    private var attempts: [String: Int] = [:]
+    func requeryMissing(max: Int = 48) {
+        var n = 0
+        for (k, p) in params where p.wanted && p.value == nil {
+            let a = attempts[k] ?? 0
+            if a >= 6 { continue }
+            attempts[k] = a + 1
+            Core.shared.client.query(k)
+            n += 1
+            if n >= max { break }
+        }
     }
 
     func requeryWanted() {
@@ -69,6 +84,7 @@ final class Store {
     }
 
     func resetValues() {
+        attempts.removeAll()
         for p in params.values {
             p.value = nil
             p.touched = 0
@@ -101,6 +117,7 @@ final class Core: ObservableObject {
     @Published var layoutVersion = 0
 
     private var timer: Timer?
+    private var requeryTick = 0
 
     private init() {
         client.x32 = console.isX32
@@ -154,6 +171,10 @@ final class Core: ObservableObject {
             for i in f where !discovered.contains(where: { $0.ip == i.ip }) { discovered.append(i) }
         }
         let c = client.isConnected()
+        if c {
+            requeryTick += 1
+            if requeryTick >= 45 { requeryTick = 0; Store.shared.requeryMissing() }
+        }
         if c != connected {
             connected = c
             if c {

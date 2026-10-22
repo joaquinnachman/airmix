@@ -1,5 +1,10 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.4.4
+- **GAIN según la fuente del canal.** La perilla GAIN y el 48V ahora van al preamp de la entrada que tiene asignada el canal ("Fuente"), no al número de canal. Si la fuente no tiene preamp (USB, AUX), lo dice en lugar de mostrar una perilla muerta.
+  - Debajo se ve qué preamp se está usando, y si la consola no contesta aparece "la consola no responde" en amarillo. Si te pasa, pasame lo que dice esa línea.
+- **Reintento de pedidos.** Si la consola no contestó algo (por ejemplo, el efecto cargado en un FX), la app lo vuelve a pedir cada 1,5 s, hasta 6 veces. Los pedidos salen un poco más espaciados para no saturar la consola.
+
 ## Novedades 0.4.3
 - **EFECTOS editables.** Elegís el FX a la izquierda y a la derecha cambiás el tipo de efecto y todos sus parámetros, con valores reales (ms, s, Hz, dB…). También el retorno, el send master y el mute.
   - Los rangos salen de las mismas tablas que usan X-Air Edit y las escenas .scn.

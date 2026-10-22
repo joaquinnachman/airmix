@@ -9,6 +9,8 @@
 | Sends on fader (buses y FX) | ✅ | ✅ |
 | MUTE FX global con restauración | ✅ | ✅ |
 | Detalle: CONFIG / GATE / DYN / EQ (gráfico arrastrable) / ENVÍOS | ✅ | ✅ |
+| CONFIG: GAIN / 48V según la fuente del canal (insrc / source), con aviso si la consola no responde | ✅ | ✅ |
+| Reintento automático de pedidos sin respuesta (cada 1,5 s, hasta 6 veces) | ✅ | ✅ |
 | CONFIG: nombre con botón OK y verificación contra la consola (3 intentos) | ✅ | ✅ |
 | CONFIG: paleta de 16 colores (canales y buses); el color del bus se ve en envíos, selector, encabezado y fader | ✅ | ✅ |
 | EQ: RTA de la consola de fondo (X Air /meters/4, X32 /meters/15) con botón RTA | ✅ | ✅ |

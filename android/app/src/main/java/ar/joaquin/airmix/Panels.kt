@@ -184,7 +184,6 @@ object Panels {
 
         if (s.kind == Kind.CH) {
             val p = s.prefix
-            val ha = s.headampAddr
             val isX32 = App.console.isX32
 
             val pre = addCard(root, "PREAMP")
@@ -201,14 +200,43 @@ object Panels {
             }
             pre.addView(src, lp(MATCH, dp(26)))
             val r3 = row()
-            if (ha != null) r3.addView(knob(Spec("GAIN", "$ha/gain", def = 12f / 72f) { Fmt.db(Fmt.lin(-12f, 60f, it)) }))
+            // GAIN y 48V dependen de la fuente del canal: se rearman cuando cambia.
+            val gainSlot = FrameLayout(ctx)
+            val phantomSlot = FrameLayout(ctx)
+            val gainInfo = label("", 12f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL)
+            var shownHa: String? = "?"
+            gainSlot.bind(s.sourceAddr) { v ->
+                val ha = s.headampFor(v.asI())
+                if (ha == shownHa) return@bind
+                shownHa = ha
+                gainSlot.removeAllViews()
+                phantomSlot.removeAllViews()
+                if (ha == null) {
+                    gainSlot.addView(label("SIN PREAMP\n(fuente sin ganancia)", 13f, C.TEXT_DIM).also { it.maxLines = 2 }, FrameLayout.LayoutParams(MATCH, MATCH))
+                    gainInfo.text = ""
+                    return@bind
+                }
+                gainSlot.addView(knob(Spec("GAIN", "$ha/gain", def = 12f / 72f) { Fmt.db(Fmt.lin(-12f, 60f, it)) }), FrameLayout.LayoutParams(MATCH, MATCH))
+                phantomSlot.addView(toggle("48V", "$ha/phantom", color = C.MUTE, sp = 17f), FrameLayout.LayoutParams(MATCH, MATCH))
+                // Diagnóstico: si la consola no contesta por esa entrada, se avisa (y se ve la dirección usada).
+                gainInfo.text = "Preamp: $ha"
+                gainInfo.setTextColor(C.TEXT_DIM)
+                gainInfo.postDelayed({
+                    if (shownHa == ha && App.store.get("$ha/gain") == null) {
+                        gainInfo.text = "Preamp: $ha · la consola no responde"
+                        gainInfo.setTextColor(C.SOLO)
+                    }
+                }, 2500)
+            }
+            r3.addView(gainSlot, lp(dp(190), dp(80)))
             // X32 tiene TRIM digital por canal; en X Air la ganancia de entrada es solo el headamp.
             if (isX32) r3.addView(knob(Spec("TRIM", "$p/preamp/trim", def = 0.5f, bipolar = true) { Fmt.db(Fmt.lin(-18f, 18f, it)) }))
             r3.addView(knob(Spec("LOW CUT", "$p/preamp/hpf", def = 0f) { Fmt.hz(Fmt.log(20f, 400f, it)) }))
             pre.addView(r3)
+            pre.addView(gainInfo, lp(MATCH, dp(18)))
             val r4 = row()
             r4.addView(toggle("LOW CUT", "$p/preamp/hpon", sp = 17f), lp(dp(120), dp(50)).m(r = dp(12)))
-            if (ha != null) r4.addView(toggle("48V", "$ha/phantom", color = C.MUTE, sp = 17f), lp(dp(100), dp(50)).m(r = dp(12)))
+            r4.addView(phantomSlot, lp(dp(100), dp(50)).m(r = dp(12)))
             r4.addView(toggle("Ø PHASE", "$p/preamp/invert", sp = 17f), lp(dp(120), dp(50)).m(r = dp(12)))
             r4.addView(toggle("MAIN LR", s.lrAssignAddr, sp = 17f), lp(dp(130), dp(50)))
             pre.addView(r4, lp(MATCH, WRAP).m(t = dp(8)))
