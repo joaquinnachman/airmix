@@ -19,6 +19,7 @@
 | EFECTOS: cambiar tipo, todos los parámetros con unidades reales (tabla FX_TABLE idéntica), retorno, send master, mute | ✅ | ✅ |
 | MEDIDORES (todos) | ✅ | ✅ |
 | ESCENAS .scn: guardar (/node), cargar con verificación, lista local, exportar/importar | ✅ | ✅ |
+| ESCENAS: guardado local sin internet (Android: Descargas/AirMix; iOS: Archivos → AirMix → Escenas) | ✅ | ✅ |
 | Cronómetro de show persistente | ✅ | ✅ |
 | Notas con marcas de tiempo | ✅ | ✅ |
 | TEMAS: lista editable (orden, notas, tema que suena), carga desde .txt / .docx / .doc / .rtf | ✅ | ✅ |

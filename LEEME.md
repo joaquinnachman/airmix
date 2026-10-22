@@ -1,5 +1,10 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.4.5
+- **Escenas guardadas en la tablet, sin internet.** Al tocar "LEER CONSOLA Y GUARDAR", la escena queda en la app y además en **Descargas/AirMix** (se ve en "Mis archivos"). Ya no se abre Google Drive.
+  - El botón EXPORTAR de cada escena ofrece "Guardar en Descargas/AirMix (tablet)" o "Elegir carpeta o app…".
+  - En iPad/iPhone queda en Archivos → En mi iPad → AirMix → Escenas.
+
 ## Novedades 0.4.4
 - **GAIN según la fuente del canal.** La perilla GAIN y el 48V ahora van al preamp de la entrada que tiene asignada el canal ("Fuente"), no al número de canal. Si la fuente no tiene preamp (USB, AUX), lo dice en lugar de mostrar una perilla muerta.
   - Debajo se ve qué preamp se está usando, y si la consola no contesta aparece "la consola no responde" en amarillo. Si te pasa, pasame lo que dice esa línea.

@@ -158,9 +158,8 @@ final class Scenes: ObservableObject {
             let file = Scenes.libraryURL().appendingPathComponent(Scenes.safeName(name) + ".scn")
             try? text.data(using: .isoLatin1, allowLossyConversion: true)?.write(to: file)
             libraryVersion += 1
-            status = "✓ Escena leída (\(count) bloques) y guardada en el dispositivo como \"\(file.lastPathComponent)\"."
-            exportName = Scenes.safeName(name)
-            exportText = text
+            // Queda guardada local, sin internet (el dispositivo suele estar en el WiFi de la consola).
+            status = "✓ Escena leída (\(count) bloques) y guardada en el dispositivo: Archivos → En mi iPad/iPhone → AirMix → Escenas → \"\(file.lastPathComponent)\"."
         }
         step()
     }

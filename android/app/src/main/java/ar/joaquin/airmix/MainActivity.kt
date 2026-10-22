@@ -947,7 +947,7 @@ class MainActivity : Activity() {
         save.setOnClickListener { Scenes.save(name.text.toString(), notes.text.toString()) }
         saveCard.addView(save, lp(MATCH, dp(54)).m(t = dp(12)))
         saveCard.addView(
-            label("Se guarda en la tablet y te ofrece exportar el .scn (Drive, Descargas…). Se abre en X-Air Edit / X32-Edit.", 13f, C.TEXT_DIM, Gravity.START).also { it.maxLines = 3 },
+            label("Se guarda en la tablet, sin internet: en la app y en Descargas/AirMix (se ve en Mis archivos). Se abre en X-Air Edit / X32-Edit.", 13f, C.TEXT_DIM, Gravity.START).also { it.maxLines = 3 },
             lp(MATCH, WRAP).m(t = dp(10))
         )
         left.addView(saveCard, lp(MATCH, WRAP))
@@ -992,7 +992,7 @@ class MainActivity : Activity() {
             }
             r.addView(load, lp(dp(100), dp(40)).m(r = dp(6)))
             val share = Btn(this, "EXPORTAR", BtnStyle.OUTLINE, 13f)
-            share.setOnClickListener { exportDocument(file.name.removeSuffix(".scn"), file.readText(Charsets.ISO_8859_1)) }
+            share.setOnClickListener { exportMenu(share, file.name.removeSuffix(".scn"), file.readText(Charsets.ISO_8859_1)) }
             r.addView(share, lp(dp(90), dp(40)).m(r = dp(6)))
             val del = Btn(this, "✕", BtnStyle.OUTLINE, 15f)
             del.setOnClickListener {
@@ -1018,8 +1018,58 @@ class MainActivity : Activity() {
         val f = java.io.File(scenesDir(), safeName(name) + ".scn")
         f.writeText(text, Charsets.ISO_8859_1)
         if (tab == Tab.SCENES) render()
-        Scenes.onStatus?.invoke("✓ Guardada en la tablet como \"${f.name}\".")
-        exportDocument(name, text)
+        // Copia local en Descargas/AirMix: no necesita internet (la tablet suele estar en el WiFi de la consola).
+        val where = saveToDownloads(name, text)
+        Scenes.onStatus?.invoke(
+            if (where != null) "✓ Guardada en la tablet: \"${f.name}\" (en la app y en $where)."
+            else "✓ Guardada en la app como \"${f.name}\". No se pudo copiar a Descargas: usá EXPORTAR."
+        )
+    }
+
+    /** EXPORTAR: a Descargas de la tablet (local) o a otra carpeta / app con el selector del sistema. */
+    private fun exportMenu(anchor: View, name: String, text: String) {
+        val pm = android.widget.PopupMenu(this, anchor)
+        pm.menu.add(0, 1, 0, "Guardar en Descargas/AirMix (tablet)")
+        pm.menu.add(0, 2, 1, "Elegir carpeta o app…")
+        pm.setOnMenuItemClickListener { item ->
+            if (item.itemId == 1) {
+                val where = saveToDownloads(name, text)
+                Toast.makeText(this, if (where != null) "Guardada en $where" else "No se pudo guardar en Descargas", Toast.LENGTH_LONG).show()
+            } else {
+                exportDocument(name, text)
+            }
+            true
+        }
+        pm.show()
+    }
+
+    /**
+     * Guarda el .scn en Descargas/AirMix de la tablet (MediaStore, Android 10+, sin permisos).
+     * Devuelve la ruta para mostrar, o null si no se pudo.
+     */
+    private fun saveToDownloads(name: String, text: String): String? {
+        val file = safeName(name) + ".scn"
+        val bytes = text.toByteArray(Charsets.ISO_8859_1)
+        return try {
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val cv = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, file)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/AirMix")
+                }
+                val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return null
+                contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: return null
+                "Descargas/AirMix/$file"
+            } else {
+                @Suppress("DEPRECATION")
+                val dir = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "AirMix")
+                dir.mkdirs()
+                java.io.File(dir, file).writeBytes(bytes)
+                "Descargas/AirMix/$file"
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun confirmLoad(scene: Scenes.Scene) {

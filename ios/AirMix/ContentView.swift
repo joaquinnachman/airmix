@@ -645,7 +645,7 @@ struct ScenesView: View {
                         .background(RoundedRectangle(cornerRadius: 10).fill(C.bg))
                     Pill(text: "LEER CONSOLA Y GUARDAR", active: true, size: 16) { scenes.save(name: name, notes: notes) }
                         .frame(height: 52)
-                    Text("Se guarda en el dispositivo (app Archivos → AirMix → Escenas) y te ofrece exportar el .scn. Se abre en X-Air Edit / X32-Edit.")
+                    Text("Se guarda en el dispositivo, sin internet: app Archivos → En mi iPad/iPhone → AirMix → Escenas. EXPORTAR la copia a otra carpeta. Se abre en X-Air Edit / X32-Edit.")
                         .font(bf(12)).foregroundColor(C.dim)
                 }
                 Card(title: "ESTADO") {
