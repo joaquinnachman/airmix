@@ -17,6 +17,13 @@ Dueño: Joaquín Nachman. Uso principal: shows del dúo Garko y Palmito con una 
   - Las dos salen en el mismo Release.
 - Antes de cerrar un cambio hay que esperar a que los dos jobs pasen.
 
+## Pantallas chicas (regla de Joaquín, 23/10/2026)
+- En **cada** update hay que revisar también la versión de celular, no solo la de tablet:
+  - pantalla MEZCLA y todas las pantallas que se tocaron;
+  - nada de textos encimados o cortados;
+  - faders con recorrido usable.
+- Antes de entregar, renderizar o capturar en tamaño celular.
+
 ## Rendimiento (el motivo de la app)
 - Nada de asignaciones en los caminos calientes (medidores, onDraw/Canvas).
 - Medidores: un único timer a ~30 fps redibuja solo los visibles.
