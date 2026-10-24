@@ -41,6 +41,22 @@ enum C {
     ]
 }
 
+/// Acento de color por sector. Mismo mapa que Sector en Ui.kt.
+enum Sector {
+    static func of(_ k: Kind) -> Color {
+        switch k {
+        case .ch: return Color(hex: 0xFF7A45)      // coral
+        case .aux: return Color(hex: 0xC764E8)     // violeta
+        case .rtn: return Color(hex: 0x2EC4B6)     // turquesa
+        case .bus: return Color(hex: 0x4CC9F0)     // celeste
+        case .mtx: return Color(hex: 0x8C9EFF)     // lavanda
+        case .fxsend: return Color(hex: 0xFFB547)  // ámbar
+        case .dca: return Color(hex: 0xF06292)     // rosa
+        case .lr: return Color(hex: 0xE8EDF2)      // blanco
+        }
+    }
+}
+
 func bf(_ size: CGFloat) -> Font { .system(size: size, weight: .bold) }
 
 enum PillStyle { case nav, tab, light, mute, small, outline }
@@ -52,9 +68,12 @@ struct Pill: View {
     var activeColor = C.accent
     var style: PillStyle = .light
     var size: CGFloat = 15
+    /// Color del texto cuando no está activo (nil = el del estilo).
+    var idleColor: Color? = nil
     let action: () -> Void
 
     private var fg: Color {
+        if !active, let c = idleColor { return c }
         if active {
             if style == .tab { return activeColor }
             return activeColor == C.mute ? .white : C.ink

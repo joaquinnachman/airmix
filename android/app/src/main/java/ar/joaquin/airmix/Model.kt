@@ -218,7 +218,9 @@ fun stripsOfKind(k: Kind): List<Strip> {
 }
 
 /** Una "capa" del riel izquierdo: hasta 8 tiras. */
-class Layer(val label: String, val strips: List<Strip>)
+class Layer(val label: String, val strips: List<Strip>) {
+    val kind: Kind get() = strips.firstOrNull()?.kind ?: Kind.CH
+}
 
 fun buildLayers(): List<Layer> {
     val c = App.console

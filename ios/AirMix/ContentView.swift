@@ -59,7 +59,10 @@ struct ContentView: View {
                 .scaledToFit()
                 .frame(height: compact ? 22 : 28)
                 .accessibilityLabel("AirMix")
-            Spacer().frame(width: compact ? 4 : 30)
+            // Versión instalada (sale de CFBundleShortVersionString, así siempre coincide).
+            Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
+                .font(bf(11)).foregroundColor(C.dim).padding(.top, 8)
+            Spacer().frame(width: compact ? 4 : 18)
             ForEach(Tab.allCases, id: \.self) { t in
                 Pill(text: t.rawValue, active: tab == t, style: .tab, size: compact ? 12 : 15) { tab = t }
                     .frame(width: compact ? 84 : 120, height: 38)
@@ -106,7 +109,7 @@ struct ContentView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 6) {
                     ForEach(layers) { l in
-                        Pill(text: l.label, active: tab == .mix && layerIdx == l.id, style: .nav, size: compact ? 12 : 14) {
+                        Pill(text: l.label, active: tab == .mix && layerIdx == l.id, activeColor: Sector.of(l.kind), style: .nav, size: compact ? 12 : 14, idleColor: Sector.of(l.kind)) {
                             layerIdx = l.id
                             tab = .mix
                             detail = nil
@@ -162,7 +165,8 @@ struct ContentView: View {
                             .background(RoundedRectangle(cornerRadius: 10).fill(C.surface2))
                     }.buttonStyle(.plain)
                 } else {
-                    Text(layer?.label ?? "").font(bf(compact ? 16 : 20)).foregroundColor(C.text)
+                    RoundedRectangle(cornerRadius: 3).fill(Sector.of(layer?.kind ?? .ch)).frame(width: 6, height: 26)
+                    Text(layer?.label ?? "").font(bf(compact ? 16 : 20)).foregroundColor(Sector.of(layer?.kind ?? .ch))
                     Spacer()
                     sendsMenu(label: "SENDS ON FADER ▾", dark: false)
                 }

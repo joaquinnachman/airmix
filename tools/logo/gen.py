@@ -22,14 +22,19 @@ def text_path(s, size, x, baseline, tracking=0.0):
         cx += gs[g].width + tracking * upm
     return pen.getCommands(), bp.bounds
 
-# icon: 240 space; wordmark size 19 (0.4.3: más grande), centrado, baseline 200; el dibujo sube 10.
-WS, WB, ART_DY = 19, 200, -10
+# icon: 240 space; wordmark size 30 (0.4.6: bien grande), centrado, baseline 208; el dibujo sube 18.
+WS, WB, ART_DY = 30, 208, -18
 d0, b0 = text_path("airmix", WS, 0, WB, tracking=1.5/13)
 w = b0[2] - b0[0]
+# Zona segura del ícono adaptativo de Android: círculo de radio 110 (escala 240) alrededor del centro.
+import math
+for (x, y) in [(120 - w/2, b0[1]), (120 + w/2, b0[1]), (120 - w/2, b0[3]), (120 + w/2, b0[3])]:
+    assert math.hypot(x - 120, y - 120) < 110, ("wordmark fuera de la zona segura", w, b0)
+print("wordmark", round(w, 1), "x", round(b0[3] - b0[1], 1))
 word_icon, _ = text_path("airmix", WS, 120 - w/2 - b0[0], WB, tracking=1.5/13)
 
 CURVE = "M36 116 C 64 116, 72 66, 100 66 C 128 66, 132 146, 156 146 C 176 146, 184 116, 204 116"
-ORANGE, DARK, WHITE, LINE, DIM = "#FF7A45", "#12161B", "#E8EDF2", "#2E3743", "#8A96A3"
+ORANGE, DARK, WHITE, LINE, DIM = "#FF7A45", "#12161B", "#E8EDF2", "#2E3743", "#B9C2CC"
 
 def art(tx="", word=True):
     s = f'<g{tx}><g transform="translate(0,{ART_DY})">'

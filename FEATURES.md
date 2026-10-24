@@ -25,3 +25,5 @@
 | TEMAS: lista editable (orden, notas, tema que suena), carga desde .txt / .docx / .doc / .rtf | ✅ | ✅ |
 | Layout iPhone (tiras con scroll horizontal) | — | ✅ |
 | Ícono 8C (curva EQ) + logo en la barra superior, mismo vector | ✅ | ✅ |
+| Versión instalada al lado del logo | ✅ | ✅ |
+| Acentos de color por sector (Sector en Ui.kt / Theme.swift) | ✅ | ✅ |

@@ -229,7 +229,10 @@ class MainActivity : Activity() {
         logo.scaleType = ImageView.ScaleType.FIT_START
         logo.contentDescription = "AirMix"
         top.addView(logo, lp(dp(118), dp(28)))
-        top.addView(View(this), lp(dp(40), 1))
+        // Versión instalada (sale del versionName, así siempre coincide).
+        val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
+        top.addView(label(ver, 12f, C.TEXT_DIM, Gravity.START or Gravity.BOTTOM), lp(dp(48), dp(26)).m(l = dp(6)))
+        top.addView(View(this), lp(dp(12), 1))
         for (t in Tab.values()) {
             val b = Btn(this, t.label, BtnStyle.TAB, 16f)
             b.setOnClickListener {
@@ -302,6 +305,9 @@ class MainActivity : Activity() {
         list.setPadding(dp(10), dp(8), dp(10), dp(8))
         layers.forEachIndexed { i, l ->
             val b = Btn(this, l.label, BtnStyle.NAV, 15f)
+            b.activeColor = Sector.of(l.kind)
+            b.idleText = Sector.of(l.kind)
+            b.refresh()
             b.setOnClickListener {
                 layerIdx = i
                 tab = Tab.MIX
@@ -401,8 +407,10 @@ class MainActivity : Activity() {
             header.addView(exit, lp(dp(110), dp(40)))
         } else {
             header.setBackgroundColor(C.PANEL)
+            val sc = Sector.of(layer?.kind ?: Kind.CH)
+            header.addView(View(this).also { it.background = rounded(sc, 3) }, lp(dp(6), dp(28)).m(r = dp(12)))
             header.addView(
-                label(layer?.label ?: "", 20f, C.TEXT, Gravity.START or Gravity.CENTER_VERTICAL),
+                label(layer?.label ?: "", 20f, sc, Gravity.START or Gravity.CENTER_VERTICAL),
                 lp(0, MATCH, 1f)
             )
             val sel = Btn(this, "SENDS ON FADER ▾", BtnStyle.OUTLINE, 15f)

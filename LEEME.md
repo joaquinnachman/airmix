@@ -1,5 +1,19 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.4.6
+- **Colores por sector.** Cada sección tiene su color en el riel, el encabezado, el título de cada tira y el fader:
+  - canales: coral
+  - AUX: violeta
+  - FX returns: turquesa
+  - buses: celeste
+  - matrices: lavanda
+  - FX sends: ámbar
+  - DCA: rosa
+  - main: blanco
+  - El color de scribble de cada canal y el color del bus en los envíos se mantienen.
+- **Ícono** con "airmix" bastante más grande y más claro.
+- **Versión** al lado del logo, arriba a la izquierda.
+
 ## Novedades 0.4.5
 - **Escenas guardadas en la tablet, sin internet.** Al tocar "LEER CONSOLA Y GUARDAR", la escena queda en la app y además en **Descargas/AirMix** (se ve en "Mis archivos"). Ya no se abre Google Drive.
   - El botón EXPORTAR de cada escena ofrece "Guardar en Descargas/AirMix (tablet)" o "Elegir carpeta o app…".

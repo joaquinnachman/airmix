@@ -22,7 +22,7 @@ struct StripView: View {
         let faderAddr = send ?? strip.faderAddr
         let sendColor = target.bus > 0 ? BusColor.of(busColor.int ?? 0) : C.sends
         VStack(spacing: compact ? 4 : 6) {
-            Text(strip.title).font(bf(11)).foregroundColor(C.dim).padding(.top, 4)
+            Text(strip.title).font(bf(11)).foregroundColor(Sector.of(strip.kind)).padding(.top, 4)
             NameChip(strip: strip)
                 .padding(.horizontal, 6)
                 .onTapGesture { onOpen(strip) }
@@ -38,7 +38,7 @@ struct StripView: View {
             }
             .padding(.horizontal, 6)
             HStack(spacing: 2) {
-                FaderView(addr: faderAddr, fill: send != nil ? sendColor : C.fill)
+                FaderView(addr: faderAddr, fill: send != nil ? sendColor : Sector.of(strip.kind))
                 if strip.meterL >= 0 {
                     MeterView(l: strip.meterL, r: strip.meterR)
                         .frame(width: strip.meterR >= 0 ? 10 : 6)

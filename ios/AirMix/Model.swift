@@ -214,6 +214,7 @@ struct Layer: Identifiable {
     let id: Int
     let label: String
     let strips: [Strip]
+    var kind: Kind { strips.first?.kind ?? .ch }
 }
 
 func buildLayers() -> [Layer] {

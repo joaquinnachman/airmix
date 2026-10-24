@@ -45,6 +45,32 @@ object C {
     val KNOB_FACE = Color.parseColor("#1C222A")
 }
 
+/**
+ * Acento de color por sector (canales, AUX, FX returns, buses…). Mismo mapa en Theme.swift.
+ * Se usa en el botón de la capa, el encabezado, el título de cada tira y el relleno del fader.
+ */
+object Sector {
+    val CH = Color.parseColor("#FF7A45")      // coral
+    val AUX = Color.parseColor("#C764E8")     // violeta
+    val RTN = Color.parseColor("#2EC4B6")     // turquesa
+    val BUS = Color.parseColor("#4CC9F0")     // celeste
+    val MTX = Color.parseColor("#8C9EFF")     // lavanda
+    val FXSEND = Color.parseColor("#FFB547")  // ámbar
+    val DCA = Color.parseColor("#F06292")     // rosa
+    val LR = Color.parseColor("#E8EDF2")      // blanco
+
+    fun of(k: Kind): Int = when (k) {
+        Kind.CH -> CH
+        Kind.AUX -> AUX
+        Kind.RTN -> RTN
+        Kind.BUS -> BUS
+        Kind.MTX -> MTX
+        Kind.FXSEND -> FXSEND
+        Kind.DCA -> DCA
+        Kind.LR -> LR
+    }
+}
+
 val FONT: Typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
 val FONT_MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
@@ -110,6 +136,8 @@ enum class BtnStyle { NAV, TAB, LIGHT, MUTE, SMALL, OUTLINE }
 
 class Btn(ctx: Context, label: String, private val style: BtnStyle = BtnStyle.LIGHT, sp: Float = 16f) : TextView(ctx) {
     var activeColor = C.ACCENT
+    /** Color del texto cuando no está activo (0 = el del estilo). */
+    var idleText = 0
     var active = false
         set(v) {
             field = v
@@ -154,7 +182,7 @@ class Btn(ctx: Context, label: String, private val style: BtnStyle = BtnStyle.LI
         }
         bg.setColor(b)
         bg.setStroke(if (stroke != 0) strokeW else 0, stroke)
-        setTextColor(t)
+        setTextColor(if (!active && idleText != 0) idleText else t)
     }
 }
 

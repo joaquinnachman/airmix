@@ -21,7 +21,7 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     val col = col()
     col.setBackgroundColor(C.STRIP)
 
-    col.addView(label(s.title, 12f, C.TEXT_DIM), lp(MATCH, dp(24)).m(t = dp(6)))
+    col.addView(label(s.title, 12f, Sector.of(s.kind)), lp(MATCH, dp(24)).m(t = dp(6)))
 
     val name = label(s.title, 15f)
     name.setPadding(dp(4), 0, dp(4), 0)
@@ -46,7 +46,7 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
 
     val faderRow = row()
     val fader = FaderView(this)
-    fader.fillColor = if (sendAddr != null) C.SENDS else C.FILL
+    fader.fillColor = if (sendAddr != null) C.SENDS else Sector.of(s.kind)
     fader.bind(faderAddr) { v ->
         val f = v.asF()
         fader.setValue(f)
