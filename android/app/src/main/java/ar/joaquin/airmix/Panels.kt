@@ -101,6 +101,8 @@ class HoldMuteBtn(ctx: Context, private val addr: String, sp: Float) : Btn(ctx, 
     private var progress = 0f
     private var start = 0L
     private var holding = false
+    /** El toque actual ya muteó: al soltar no hay que hacer nada (si no, el UP lo desmuteaba al toque). */
+    private var done = false
     private val p = android.graphics.Paint()
     private val tick = object : Runnable {
         override fun run() {
@@ -109,6 +111,7 @@ class HoldMuteBtn(ctx: Context, private val addr: String, sp: Float) : Btn(ctx, 
             invalidate()
             if (progress >= 1f) {
                 holding = false
+                done = true
                 progress = 0f
                 text = "MUTE"
                 App.store.set(addr, 0)
@@ -131,6 +134,7 @@ class HoldMuteBtn(ctx: Context, private val addr: String, sp: Float) : Btn(ctx, 
         when (e.actionMasked) {
             android.view.MotionEvent.ACTION_DOWN -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
+                done = false
                 if (!muted()) {
                     holding = true
                     start = android.os.SystemClock.uptimeMillis()
@@ -139,7 +143,9 @@ class HoldMuteBtn(ctx: Context, private val addr: String, sp: Float) : Btn(ctx, 
                 }
             }
             android.view.MotionEvent.ACTION_UP -> {
-                if (holding) {
+                if (done) {
+                    done = false
+                } else if (holding) {
                     holding = false
                     progress = 0f
                     text = "MUTE"

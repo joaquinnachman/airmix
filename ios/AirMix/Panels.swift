@@ -70,6 +70,8 @@ struct HoldMuteButton: View {
     let size: CGFloat
     @State private var pressing = false
     @State private var progress: CGFloat = 0
+    /// Momento en que se muteó: el mismo toque, al soltar, no tiene que desmutear.
+    @State private var mutedAt = Date.distantPast
 
     init(addr: String, size: CGFloat) {
         _p = ObservedObject(wrappedValue: Store.shared.param(addr))
@@ -80,7 +82,7 @@ struct HoldMuteButton: View {
         let muted = (p.int ?? 1) == 0
         if muted {
             Pill(text: "MUTE", active: true, activeColor: C.mute, style: .mute, size: size) {
-                Store.shared.set(p.address, .i(1))
+                if Date().timeIntervalSince(mutedAt) > 0.8 { Store.shared.set(p.address, .i(1)) }
             }
         } else {
             ZStack(alignment: .leading) {
@@ -93,6 +95,7 @@ struct HoldMuteButton: View {
             }
             .contentShape(Rectangle())
             .onLongPressGesture(minimumDuration: 2, maximumDistance: 40, perform: {
+                mutedAt = Date()
                 Store.shared.set(p.address, .i(0))
                 pressing = false
                 progress = 0

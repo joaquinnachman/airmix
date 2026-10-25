@@ -1,5 +1,8 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.4.8
+- Arreglo: el MUTE del MAIN LR se desmuteaba solo al soltar el dedo después de mantenerlo 2 s. Ahora queda muteado.
+
 ## Novedades 0.4.7
 - **Vista de celular.** La interfaz se compacta en pantallas bajas:
   - tiras más bajas arriba, así el fader tiene más recorrido;
