@@ -26,4 +26,11 @@
 | Layout iPhone (tiras con scroll horizontal) | — | ✅ |
 | Ícono 8C (curva EQ) + logo en la barra superior, mismo vector | ✅ | ✅ |
 | Versión instalada al lado del logo | ✅ | ✅ |
+| Interfaz compacta para celular (tiras, escala sin encimar, barra y riel chicos, paneles con scroll horizontal) | ✅ | ✅ |
+| CLR SOLO en MEDIDORES + aviso "● SOLO" en la barra (/-stat/solo) | ✅ | ✅ |
+| NOTAS/TEMAS corre las tiras en tablet (encima en celular) | ✅ | ✅ |
+| MUTE del MAIN LR manteniendo 2 s (desmutear: un toque) | ✅ | ✅ |
+| LINK STEREO de canales (/config/chlink/N-M), par en una sola tira, capas dinámicas | ✅ | ✅ |
+| ACERCA DE (ESCENAS) | ✅ | ✅ |
+| Capturas automáticas en CI (Robolectric / simulador) adjuntas al Release | ✅ | ✅ |
 | Acentos de color por sector (Sector en Ui.kt / Theme.swift) | ✅ | ✅ |

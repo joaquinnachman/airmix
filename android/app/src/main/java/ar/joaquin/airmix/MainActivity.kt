@@ -48,6 +48,9 @@ class MainActivity : Activity() {
     private var pendingExport: String? = null
     private lateinit var rail: LinearLayout
     private lateinit var conn: Btn
+    private lateinit var soloChip: Btn
+    private var shownLinks: Set<Int> = emptySet()
+    private var linkTick = 0
     private val tabBtns = HashMap<Tab, Btn>()
     private val layerBtns = ArrayList<Btn>()
 
@@ -69,12 +72,15 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Celular en horizontal: menos de ~520 dp de alto -> interfaz compacta.
+        Layout.compact = resources.configuration.screenHeightDp in 1..519
         prefs().getString("model", null)?.let { App.applyModel(it) }
         ShowTimer.load(prefs())
         Setlist.load(prefs())
         if (App.client == null) App.client = MixerClient(applicationContext).also { it.start() }
         App.client?.x32 = App.console.isX32
         setContentView(buildRoot())
+        watchLinks()
         rebuildRail()
         render()
         val ip = prefs().getString("ip", null)
@@ -167,6 +173,18 @@ class MainActivity : Activity() {
             }
         }
         if (connected) for (v in App.meterViews) v.invalidate()
+        // Links estéreo: si cambian (desde la app, la consola u otra app), se rearman las capas.
+        if (++linkTick >= 15) {
+            linkTick = 0
+            val now = linkedPairs()
+            if (now != shownLinks) {
+                shownLinks = now
+                val keepDetail = detail
+                rebuildRail()
+                detail = keepDetail
+                render()
+            }
+        }
         if (connected && ++requeryTick >= 45) {
             requeryTick = 0
             App.store.requeryMissing()
@@ -189,12 +207,22 @@ class MainActivity : Activity() {
         )
     }
 
+    /** Observa (sin vista) el estado de link de todos los pares, para que se pidan y se reintenten. */
+    private val watchedLinks = HashSet<String>()
+    private fun watchLinks() {
+        for (p in chLinkPairs()) {
+            val a = chLinkAddr(p)
+            if (watchedLinks.add(a)) App.store.observe(a) {}
+        }
+    }
+
     private fun onXinfo(name: String, model: String, fw: String) {
         App.mixerName = name
         App.firmware = fw
         prefs().edit().putString("model", model).apply()
         val changed = App.applyModel(model)
         updateConn()
+        watchLinks()
         if (changed) {
             sends = SendTarget.MAIN
             detail = null
@@ -222,45 +250,62 @@ class MainActivity : Activity() {
 
         val top = row()
         top.setBackgroundColor(C.TOP)
-        top.setPadding(dp(16), 0, dp(12), 0)
+        top.setPadding(dp(sz(16, 10)), 0, dp(sz(12, 8)), 0)
         // Logo 8C (curva EQ + "airmix"), mismo vector que el ícono. Generado por tools/logo/gen.py.
         val logo = ImageView(this)
         logo.setImageResource(R.drawable.logo_lockup)
         logo.scaleType = ImageView.ScaleType.FIT_START
         logo.contentDescription = "AirMix"
-        top.addView(logo, lp(dp(118), dp(28)))
+        top.addView(logo, lp(dp(sz(118, 88)), dp(sz(28, 21))))
         // Versión instalada (sale del versionName, así siempre coincide).
         val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
-        top.addView(label(ver, 12f, C.TEXT_DIM, Gravity.START or Gravity.BOTTOM), lp(dp(48), dp(26)).m(l = dp(6)))
-        top.addView(View(this), lp(dp(12), 1))
+        top.addView(label(ver, sz(12f, 10f), C.TEXT_DIM, Gravity.START or Gravity.BOTTOM), lp(dp(sz(48, 38)), dp(sz(26, 20))).m(l = dp(sz(6, 4))))
+        top.addView(View(this), lp(dp(sz(12, 4)), 1))
         for (t in Tab.values()) {
-            val b = Btn(this, t.label, BtnStyle.TAB, 16f)
+            val b = Btn(this, t.label, BtnStyle.TAB, sz(16f, 12f))
             b.setOnClickListener {
                 tab = t
                 render()
             }
             tabBtns[t] = b
-            top.addView(b, lp(dp(124), dp(40)).m(r = dp(6)))
+            top.addView(b, lp(dp(sz(124, 78)), dp(sz(40, 34))).m(r = dp(sz(6, 3))))
         }
         top.addView(View(this), lp(0, 1, 1f))
-        conn = Btn(this, "", BtnStyle.OUTLINE, 14f)
+        // Aviso de solo prendido (CLR SOLO ahora vive en MEDIDORES): tocarlo apaga todos los solos.
+        soloChip = Btn(this, "● SOLO", BtnStyle.LIGHT, sz(14f, 12f))
+        soloChip.activeColor = C.SOLO
+        soloChip.active = true
+        soloChip.visibility = View.GONE
+        soloChip.setOnClickListener { clearSolos() }
+        soloChip.bind("/-stat/solo") { v -> soloChip.visibility = if (v.asI() != 0) View.VISIBLE else View.GONE }
+        top.addView(soloChip, lp(dp(sz(96, 74)), dp(sz(40, 32))).m(r = dp(sz(8, 4))))
+        conn = Btn(this, "", BtnStyle.OUTLINE, sz(14f, 12f))
+        conn.maxLines = 1
+        conn.ellipsize = android.text.TextUtils.TruncateAt.END
+        conn.setPadding(dp(8), 0, dp(8), 0)
         conn.setOnClickListener { showConnect() }
-        top.addView(conn, lp(dp(240), dp(40)))
-        root.addView(top, lp(MATCH, dp(60)))
+        top.addView(conn, lp(dp(sz(240, 150)), dp(sz(40, 34))))
+        root.addView(top, lp(MATCH, dp(sz(60, 46))))
         updateConn()
 
         val body = row()
         body.gravity = Gravity.TOP
         rail = col()
         rail.setBackgroundColor(C.NAV_BG)
-        body.addView(rail, lp(dp(116), MATCH))
+        body.addView(rail, lp(dp(sz(116, 92)), MATCH))
         val host = FrameLayout(this)
         content = FrameLayout(this)
         host.addView(content, FrameLayout.LayoutParams(MATCH, MATCH))
         notesPanel = buildNotes()
         notesPanel.visibility = View.GONE
-        host.addView(notesPanel, FrameLayout.LayoutParams(dp(420), MATCH, Gravity.END))
         body.addView(host, lp(0, MATCH, 1f))
+        if (Layout.compact) {
+            // Celular: no hay lugar para correr las tiras; el panel va encima.
+            host.addView(notesPanel, FrameLayout.LayoutParams(dp(320), MATCH, Gravity.END))
+        } else {
+            // Tablet: el panel ocupa su lugar y las tiras se angostan hacia la izquierda (no quedan tapadas).
+            body.addView(notesPanel, lp(dp(420), MATCH))
+        }
         root.addView(body, lp(MATCH, 0, 1f))
         return root
     }
@@ -276,10 +321,10 @@ class MainActivity : Activity() {
         timerBox.gravity = Gravity.CENTER
         timerBox.background = rounded(C.SURFACE, 12)
         timerBox.addView(label("SHOW", 11f, C.TEXT_DIM), lp(MATCH, dp(16)))
-        timerLabel = label("00:00", 24f, C.TEXT_DIM)
+        timerLabel = label("00:00", sz(24f, 18f), C.TEXT_DIM)
         lastTimerText = ""
-        timerBox.addView(timerLabel, lp(MATCH, dp(30)))
-        timerBox.addView(label("tocá: ▶ / ❚❚", 10f, C.TICK), lp(MATCH, dp(14)))
+        timerBox.addView(timerLabel, lp(MATCH, dp(sz(30, 24))))
+        if (!Layout.compact) timerBox.addView(label("tocá: ▶ / ❚❚", 10f, C.TICK), lp(MATCH, dp(14)))
         timerBox.isClickable = true
         timerBox.setOnClickListener {
             ShowTimer.toggle(prefs())
@@ -299,12 +344,12 @@ class MainActivity : Activity() {
                 .show()
             true
         }
-        rail.addView(timerBox, lp(MATCH, dp(76)).m(dp(10), dp(10), dp(10), dp(2)))
+        rail.addView(timerBox, lp(MATCH, dp(sz(76, 58))).m(dp(sz(10, 6)), dp(sz(10, 6)), dp(sz(10, 6)), dp(2)))
 
         val list = col()
-        list.setPadding(dp(10), dp(8), dp(10), dp(8))
+        list.setPadding(dp(sz(10, 6)), dp(sz(8, 4)), dp(sz(10, 6)), dp(sz(8, 4)))
         layers.forEachIndexed { i, l ->
-            val b = Btn(this, l.label, BtnStyle.NAV, 15f)
+            val b = Btn(this, l.label, BtnStyle.NAV, sz(15f, 12f))
             b.activeColor = Sector.of(l.kind)
             b.idleText = Sector.of(l.kind)
             b.refresh()
@@ -315,18 +360,18 @@ class MainActivity : Activity() {
                 render()
             }
             layerBtns.add(b)
-            list.addView(b, lp(MATCH, dp(50)).m(b = dp(6)))
+            list.addView(b, lp(MATCH, dp(sz(50, 38))).m(b = dp(sz(6, 4))))
         }
         val sv = ScrollView(this)
         sv.isVerticalScrollBarEnabled = false
         sv.addView(list, FrameLayout.LayoutParams(MATCH, WRAP))
         rail.addView(sv, lp(MATCH, 0, 1f))
 
-        val notesBtn = Btn(this, "✎ NOTAS", BtnStyle.OUTLINE, 15f)
+        val notesBtn = Btn(this, "✎ NOTAS", BtnStyle.OUTLINE, sz(15f, 12f))
         notesBtn.setOnClickListener { toggleNotes() }
-        rail.addView(notesBtn, lp(MATCH, dp(44)).m(dp(10), dp(8), dp(10), 0))
+        rail.addView(notesBtn, lp(MATCH, dp(sz(44, 36))).m(dp(sz(10, 6)), dp(sz(8, 4)), dp(sz(10, 6)), 0))
 
-        val fx = Btn(this, "MUTE\nFX", BtnStyle.MUTE, 17f)
+        val fx = Btn(this, "MUTE\nFX", BtnStyle.MUTE, sz(17f, 13f))
         fx.maxLines = 2
         fx.activeColor = C.MUTE
         val refresh: (Any) -> Unit = {
@@ -339,14 +384,14 @@ class MainActivity : Activity() {
             FxMute.toggle()
             refresh(0)
         }
-        rail.addView(fx, lp(MATCH, dp(78)).m(dp(10), dp(8), dp(10), dp(8)))
+        rail.addView(fx, lp(MATCH, dp(sz(78, 56))).m(dp(sz(10, 6)), dp(sz(8, 4)), dp(sz(10, 6)), dp(sz(14, 6))))
+    }
 
-        val clr = Btn(this, "CLR SOLO", BtnStyle.OUTLINE, 14f)
-        clr.setOnClickListener {
-            val n = if (App.console.isX32) 80 else 36
-            for (i in 1..n) App.store.set("/-stat/solosw/${Fmt.two(i)}", 0)
-        }
-        rail.addView(clr, lp(MATCH, dp(44)).m(dp(10), 0, dp(10), dp(14)))
+    /** CLR SOLO: apaga todos los solos (vive en MEDIDORES y en el aviso "● SOLO" de arriba). */
+    private fun clearSolos() {
+        val n = if (App.console.isX32) 80 else 36
+        for (i in 1..n) App.store.set("/-stat/solosw/${Fmt.two(i)}", 0)
+        App.store.set("/-stat/solo", 0)
     }
 
     private fun render() {
@@ -359,10 +404,25 @@ class MainActivity : Activity() {
                 if (d != null) buildDetail(d) else buildHome()
             }
             Tab.FX -> Panels.effects(this)
-            Tab.METERS -> AllMetersView(this).also { it.setBackgroundColor(C.BG) }
+            Tab.METERS -> buildMeters()
             Tab.SCENES -> buildScenes()
         }
         content.addView(v, FrameLayout.LayoutParams(MATCH, MATCH))
+    }
+
+    /** MEDIDORES + CLR SOLO arriba a la derecha. */
+    private fun buildMeters(): View {
+        val root = col()
+        root.setBackgroundColor(C.BG)
+        val bar = row()
+        bar.setPadding(dp(16), dp(6), dp(16), 0)
+        bar.addView(View(this), lp(0, 1, 1f))
+        val clr = Btn(this, "CLR SOLO", BtnStyle.OUTLINE, sz(14f, 12f))
+        clr.setOnClickListener { clearSolos() }
+        bar.addView(clr, lp(dp(sz(120, 100)), dp(sz(40, 32))))
+        root.addView(bar, lp(MATCH, WRAP))
+        root.addView(AllMetersView(this), lp(MATCH, 0, 1f))
+        return root
     }
 
     private fun openDetail(s: Strip) {
@@ -383,7 +443,7 @@ class MainActivity : Activity() {
         if (sendsMode) {
             val bg = rounded(if (sends.fx > 0) C.ACCENT else C.SENDS, 0)
             header.background = bg
-            val title = label("SENDS ON FADER  →  ${sends.display("")}", 20f, C.INK, Gravity.START or Gravity.CENTER_VERTICAL)
+            val title = label("SENDS ON FADER  →  ${sends.display("")}", sz(20f, 14f), C.INK, Gravity.START or Gravity.CENTER_VERTICAL)
             val target = sends
             if (target.bus > 0) {
                 title.bind(target.nameAddr!!) { v -> title.text = "SENDS ON FADER  →  ${target.display(v.toString())}" }
@@ -396,34 +456,36 @@ class MainActivity : Activity() {
                 title.bind("/fx/${target.fx}/type") { v -> title.text = "SENDS ON FADER  →  ${Fx.label(target.fx, v.asI())}" }
             }
             header.addView(title, lp(0, MATCH, 1f))
-            val change = Btn(this, "CAMBIAR ▾", BtnStyle.LIGHT, 15f)
+            val change = Btn(this, "CAMBIAR ▾", BtnStyle.LIGHT, sz(15f, 12f))
             change.setOnClickListener { showSendsPopup(change) }
-            header.addView(change, lp(dp(130), dp(40)).m(r = dp(8)))
-            val exit = Btn(this, "SALIR ✕", BtnStyle.LIGHT, 15f)
+            header.addView(change, lp(dp(sz(130, 100)), dp(sz(40, 32))).m(r = dp(8)))
+            val exit = Btn(this, "SALIR ✕", BtnStyle.LIGHT, sz(15f, 12f))
             exit.setOnClickListener {
                 sends = SendTarget.MAIN
                 render()
             }
-            header.addView(exit, lp(dp(110), dp(40)))
+            header.addView(exit, lp(dp(sz(110, 84)), dp(sz(40, 32))))
         } else {
             header.setBackgroundColor(C.PANEL)
             val sc = Sector.of(layer?.kind ?: Kind.CH)
             header.addView(View(this).also { it.background = rounded(sc, 3) }, lp(dp(6), dp(28)).m(r = dp(12)))
             header.addView(
-                label(layer?.label ?: "", 20f, sc, Gravity.START or Gravity.CENTER_VERTICAL),
+                label(layer?.label ?: "", sz(20f, 15f), sc, Gravity.START or Gravity.CENTER_VERTICAL),
                 lp(0, MATCH, 1f)
             )
-            val sel = Btn(this, "SENDS ON FADER ▾", BtnStyle.OUTLINE, 15f)
+            val sel = Btn(this, "SENDS ON FADER ▾", BtnStyle.OUTLINE, sz(15f, 12f))
             sel.setOnClickListener { showSendsPopup(sel) }
-            header.addView(sel, lp(dp(190), dp(40)))
+            header.addView(sel, lp(dp(sz(190, 140)), dp(sz(40, 32))))
         }
-        root.addView(header, lp(MATCH, dp(56)))
+        root.addView(header, lp(MATCH, dp(sz(56, 40))))
 
         val strips = row()
         strips.gravity = Gravity.TOP
         strips.setPadding(dp(4), dp(4), dp(4), dp(4))
         val list = layer?.strips ?: emptyList()
-        for (i in 0 until 8) {
+        // Capas de canales: tantas tiras como haya (un par linkeado ocupa un lugar). El resto: 8 lugares fijos.
+        val slots = if (layer?.kind == Kind.CH) list.size else 8
+        for (i in 0 until slots) {
             val v = if (i < list.size) stripView(list[i], sends) { openDetail(it) } else View(this)
             strips.addView(v, lp(0, MATCH, 1f).m(dp(2), 0, dp(2), 0))
         }
@@ -531,23 +593,24 @@ class MainActivity : Activity() {
         val next = Btn(this, "›", BtnStyle.OUTLINE, 24f)
         next.setOnClickListener { step(s, 1) }
         bar.addView(next, lp(dp(54), dp(42)))
-        root.addView(bar, lp(MATCH, dp(60)))
+        root.addView(hwrap(bar), lp(MATCH, dp(sz(60, 48))))
 
         val body = row()
         body.gravity = Gravity.TOP
         body.setPadding(dp(4), dp(4), dp(4), dp(4))
-        body.addView(stripView(s, SendTarget.MAIN) {}, lp(0, MATCH, 1f).m(r = dp(4)))
+        if (Layout.compact) body.addView(stripView(s, SendTarget.MAIN) {}, lp(dp(96), MATCH).m(r = dp(4)))
+        else body.addView(stripView(s, SendTarget.MAIN) {}, lp(0, MATCH, 1f).m(r = dp(4)))
         val panel = FrameLayout(this)
         panel.background = rounded(C.PANEL, 14)
         panel.addView(Panels.build(this, s, section), FrameLayout.LayoutParams(MATCH, MATCH))
-        body.addView(panel, lp(0, MATCH, 8f))
+        body.addView(panel, lp(0, MATCH, if (Layout.compact) 1f else 8f))
         root.addView(body, lp(MATCH, 0, 1f))
         return root
     }
 
     private fun step(s: Strip, dir: Int) {
         val list = stripsOfKind(s.kind)
-        val i = list.indexOf(s)
+        val i = list.indexOf(s.copy(pair = false))
         if (i < 0 || list.isEmpty()) return
         detail = list[(i + dir + list.size) % list.size]
         render()
@@ -966,6 +1029,11 @@ class MainActivity : Activity() {
         status.maxLines = 8
         statusCard.addView(status, lp(MATCH, WRAP).m(t = dp(6)))
         left.addView(statusCard, lp(MATCH, WRAP).m(t = dp(14)))
+        left.addView(View(this), lp(MATCH, 0, 1f))
+        val about = Btn(this, "ACERCA DE", BtnStyle.OUTLINE, 13f)
+        about.setTextColor(C.TEXT_DIM)
+        about.setOnClickListener { showAbout() }
+        left.addView(about, lp(dp(140), dp(38)).m(t = dp(10)))
         Scenes.onStatus = { msg -> status.text = msg }
         Scenes.onSaveReady = { n, text -> onSceneRead(n, text) }
         root.addView(left, lp(0, MATCH, 1f).m(r = dp(14)))
@@ -1020,6 +1088,33 @@ class MainActivity : Activity() {
         loadCard.addView(scroll(list), lp(MATCH, 0, 1f).m(t = dp(6)))
         root.addView(loadCard, lp(0, MATCH, 1.3f))
         return root
+    }
+
+    /** ACERCA DE: autoría, contacto y créditos. */
+    private fun showAbout() {
+        val ver = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
+        val msg = "AirMix $ver\n\n" +
+            "Creada por Joaquín Nachman · 2026\n" +
+            "Instagram: @joaquinnachman\n\n" +
+            "Errores y sugerencias: joaquinnachman@gmail.com\n\n" +
+            "App independiente, compatible con consolas Behringer X Air y X32. No está afiliada a Behringer ni a Music Tribe.\n\n" +
+            "Tablas de efectos y formato de escenas basados en el trabajo de Patrick-Gilles Maillot. Tipografía del logo: Unbounded (SIL OFL)."
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Acerca de")
+            .setMessage(msg)
+            .setPositiveButton("Cerrar", null)
+            .setNeutralButton("Reportar error") { _, _ ->
+                val i = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:joaquinnachman@gmail.com"))
+                    .putExtra(Intent.EXTRA_SUBJECT, "AirMix $ver: error / sugerencia")
+                try { startActivity(i) } catch (_: Exception) {
+                    Toast.makeText(this, "joaquinnachman@gmail.com", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("Instagram") { _, _ ->
+                try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://instagram.com/joaquinnachman"))) } catch (_: Exception) {}
+            }
+            .setOnDismissListener { hideBars() }
+            .show()
     }
 
     private fun onSceneRead(name: String, text: String) {

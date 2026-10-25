@@ -27,6 +27,9 @@ class FaderView(ctx: Context) : View(ctx) {
     private var dragging = false
     private val marks = floatArrayOf(10f, 5f, 0f, -5f, -10f, -20f, -30f, -40f, -60f)
     private val markLbl = arrayOf("+10", "+5", "0", "-5", "-10", "-20", "-30", "-40", "-60")
+    /** Orden de prioridad de las etiquetas: si el fader es corto, solo entran las primeras (no se enciman). */
+    private val labelOrder = intArrayOf(2, 8, 0, 5, 4, 7, 1, 6, 3)
+    private val drawnY = FloatArray(9)
     private val gd = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDoubleTap(e: MotionEvent): Boolean {
             setValue(0.75f)
@@ -60,11 +63,19 @@ class FaderView(ctx: Context) : View(ctx) {
         p.textSize = dpf(10f)
         p.textAlign = Paint.Align.RIGHT
         val lx = cx - dpf(18f)
-        for (i in marks.indices) {
+        val minGap = p.textSize * 1.25f
+        var drawn = 0
+        for (oi in labelOrder.indices) {
+            val i = labelOrder[oi]
             val y = bottom - Fmt.dbToFader(marks[i]) * travel
             p.color = if (marks[i] == 0f) C.TEXT else C.TICK
-            c.drawText(markLbl[i], lx, y + dpf(3.5f), p)
             c.drawRect(lx + dpf(3f), y - dpf(0.5f), cx - tw / 2f - dpf(3f), y + dpf(0.5f), p)
+            var free = true
+            for (d in 0 until drawn) if (Math.abs(drawnY[d] - y) < minGap) { free = false; break }
+            if (free) {
+                c.drawText(markLbl[i], lx, y + dpf(3.5f), p)
+                drawnY[drawn++] = y
+            }
         }
 
         // riel

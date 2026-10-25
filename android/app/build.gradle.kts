@@ -11,8 +11,8 @@ android {
         applicationId = "ar.joaquin.airmix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.4.6"
+        versionCode = 12
+        versionName = "0.4.7"
     }
 
     buildTypes {
@@ -28,5 +28,14 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
-// Sin dependencias externas: solo el SDK de Android + Kotlin stdlib.
+
+// Solo para las capturas automáticas en CI (no van dentro del APK).
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+}
+// La app no tiene dependencias externas: solo el SDK de Android + Kotlin stdlib (las de test no se empaquetan).

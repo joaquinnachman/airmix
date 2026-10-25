@@ -70,9 +70,11 @@ struct SendTarget: Equatable {
     }
 }
 
+/// pair = true: par estéreo linkeado (idx impar + el siguiente) mostrado como una sola tira; se controla desde el impar.
 struct Strip: Equatable, Hashable {
     let kind: Kind
     var idx: Int = 1
+    var pair = false
 
     private var c: Console { Core.shared.console }
 
@@ -91,7 +93,7 @@ struct Strip: Equatable, Hashable {
 
     var title: String {
         switch kind {
-        case .ch: return "CH \(Fmt.two(idx))"
+        case .ch: return pair ? "CH \(Fmt.two(idx))-\(Fmt.two(idx + 1))" : "CH \(Fmt.two(idx))"
         case .aux: return c.auxIns > 1 ? "AUX \(idx)" : "AUX"
         case .rtn: return c.isX32 ? "FXR \(idx)" : "FX \(idx)"
         case .bus: return "BUS \(idx)"
@@ -139,6 +141,7 @@ struct Strip: Equatable, Hashable {
     }
 
     var meterR: Int {
+        if kind == .ch && pair { return idx }
         if c.isX32 { return kind == .lr ? 71 : -1 }
         switch kind {
         case .aux: return 17
@@ -190,8 +193,8 @@ struct Strip: Equatable, Hashable {
         return (0...15).contains(src) ? "/headamp/\(Fmt.two(src + 1))" : nil
     }
 
-    static func == (a: Strip, b: Strip) -> Bool { a.kind == b.kind && a.idx == b.idx }
-    func hash(into h: inout Hasher) { h.combine(idx); h.combine("\(kind)") }
+    static func == (a: Strip, b: Strip) -> Bool { a.kind == b.kind && a.idx == b.idx && a.pair == b.pair }
+    func hash(into h: inout Hasher) { h.combine(idx); h.combine("\(kind)"); h.combine(pair) }
 }
 
 func stripsOfKind(_ k: Kind) -> [Strip] {
@@ -217,11 +220,32 @@ struct Layer: Identifiable {
     var kind: Kind { strips.first?.kind ?? .ch }
 }
 
+/// Link estéreo de canales: dirección del par que empieza en el impar n (igual que chLinkAddr en Android).
+func chLinkAddr(_ odd: Int) -> String { "/config/chlink/\(odd)-\(odd + 1)" }
+func chLinkPairs() -> [Int] { Array(stride(from: 1, to: Core.shared.console.channels, by: 2)) }
+func linkedPairs() -> Set<Int> { Set(chLinkPairs().filter { Store.shared.int(chLinkAddr($0), def: 0) != 0 }) }
+
 func buildLayers() -> [Layer] {
     let c = Core.shared.console
     var out: [Layer] = []
     func add(_ l: String, _ s: [Strip]) { out.append(Layer(id: out.count, label: l, strips: s)) }
-    for g in stripsOfKind(.ch).chunked(8) { add("CH \(g.first!.idx)-\(g.last!.idx)", g) }
+    let links = Core.shared.links
+    // Capas fijas de 8 canales; dentro de cada una, los pares linkeados se juntan en una sola tira.
+    for g in stripsOfKind(.ch).chunked(8) {
+        var merged: [Strip] = []
+        var k = 0
+        while k < g.count {
+            let s = g[k]
+            if s.idx % 2 == 1 && links.contains(s.idx) && k + 1 < g.count {
+                merged.append(Strip(kind: .ch, idx: s.idx, pair: true))
+                k += 2
+            } else {
+                merged.append(s)
+                k += 1
+            }
+        }
+        add("CH \(g.first!.idx)-\(g.last!.idx)", merged)
+    }
     add(c.auxIns > 1 ? "AUX IN" : "AUX", stripsOfKind(.aux))
     add("FX RTN", stripsOfKind(.rtn))
     let buses = stripsOfKind(.bus)

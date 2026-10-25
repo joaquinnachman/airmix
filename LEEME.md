@@ -1,5 +1,18 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.4.7
+- **Vista de celular.** La interfaz se compacta en pantallas bajas:
+  - tiras más bajas arriba, así el fader tiene más recorrido;
+  - escala de dB sin números encimados (solo muestra los que entran);
+  - medidor más ancho;
+  - barra superior y riel más chicos, y "SIN CONEXIÓN" ya no se corta;
+  - en el detalle de canal y en EFECTOS se puede desplazar hacia el costado, así no queda nada cortado.
+- **CLR SOLO** se fue de la pantalla principal y ahora está en MEDIDORES, arriba a la derecha. Si queda un solo prendido, aparece "● SOLO" en amarillo en la barra de arriba; tocándolo se apagan todos.
+- **NOTAS / TEMAS** en tablet ya no tapa las tiras: se angostan hacia la izquierda y seguís viendo y manejando todo. En celular, por falta de lugar, sigue encima.
+- **MUTE del MAIN LR**: para mutear hay que mantenerlo apretado 2 segundos (se llena una barra roja; si soltás antes, no pasa nada). Para desmutear alcanza con un toque.
+- **LINK STEREO**: en CONFIG de cada canal, "LINK STEREO 1-2" (3-4, etc.) une el canal con su par. En MEZCLA el par se ve como una sola tira "CH 01-02", con un fader, un mute y medidor doble, y la capa se reacomoda sola. Si linkeás desde la consola u otra app, AirMix también se actualiza.
+- **ACERCA DE**, abajo de todo en ESCENAS.
+
 ## Novedades 0.4.6
 - **Colores por sector.** Cada sección tiene su color en el riel, el encabezado, el título de cada tira y el fader:
   - canales: coral

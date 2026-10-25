@@ -21,50 +21,105 @@ struct StripView: View {
         let send = strip.sendAddr(target)
         let faderAddr = send ?? strip.faderAddr
         let sendColor = target.bus > 0 ? BusColor.of(busColor.int ?? 0) : C.sends
-        VStack(spacing: compact ? 4 : 6) {
-            Text(strip.title).font(bf(11)).foregroundColor(Sector.of(strip.kind)).padding(.top, 4)
-            NameChip(strip: strip)
-                .padding(.horizontal, 6)
+        let k = compact
+        VStack(spacing: k ? 3 : 6) {
+            Text(strip.title).font(bf(k ? 9 : 11)).foregroundColor(Sector.of(strip.kind)).lineLimit(1).minimumScaleFactor(0.7).padding(.top, k ? 2 : 4)
+            NameChip(strip: strip, height: k ? 26 : 34)
+                .padding(.horizontal, k ? 4 : 6)
                 .onTapGesture { onOpen(strip) }
             if let pan = strip.panAddr {
-                PanView(addr: pan).frame(height: 26)
+                PanView(addr: pan).frame(height: k ? 18 : 26)
             } else {
-                Color.clear.frame(height: 26)
+                Color.clear.frame(height: k ? 18 : 26)
             }
             HStack {
-                ParamToggle("S", addr: strip.soloAddr, color: C.solo, style: .small, size: 14).frame(width: 34, height: 28)
+                ParamToggle("S", addr: strip.soloAddr, color: C.solo, style: .small, size: k ? 11 : 14).frame(width: k ? 26 : 34, height: k ? 22 : 28)
                 Spacer(minLength: 0)
                 DbLabel(addr: faderAddr, color: send != nil ? sendColor : C.text)
             }
-            .padding(.horizontal, 6)
+            .padding(.horizontal, k ? 4 : 6)
             HStack(spacing: 2) {
                 FaderView(addr: faderAddr, fill: send != nil ? sendColor : Sector.of(strip.kind))
                 if strip.meterL >= 0 {
                     MeterView(l: strip.meterL, r: strip.meterR)
-                        .frame(width: strip.meterR >= 0 ? 10 : 6)
-                        .padding(.vertical, 16)
-                        .padding(.trailing, 6)
+                        .frame(width: strip.meterR >= 0 ? 12 : 8)
+                        .padding(.vertical, k ? 8 : 16)
+                        .padding(.trailing, k ? 3 : 6)
                 }
             }
-            ParamToggle("MUTE", addr: strip.onAddr, invert: true, color: C.mute, style: .mute, size: 16)
-                .frame(height: compact ? 38 : 46)
-                .padding(.horizontal, 6)
-                .padding(.bottom, 6)
+            Group {
+                // MAIN LR: mutear exige mantener apretado 2 s (para no mutear el PA sin querer). Desmutear: un toque.
+                if strip.kind == .lr {
+                    HoldMuteButton(addr: strip.onAddr, size: k ? 13 : 16)
+                } else {
+                    ParamToggle("MUTE", addr: strip.onAddr, invert: true, color: C.mute, style: .mute, size: k ? 13 : 16)
+                }
+            }
+            .frame(height: k ? 32 : 46)
+            .padding(.horizontal, k ? 4 : 6)
+            .padding(.bottom, k ? 4 : 6)
         }
         .background(C.strip)
         .id(faderAddr)
     }
 }
 
+/// MUTE con retención: mantener 2 s para mutear (se llena una barra; si se suelta antes, se cancela). Muteado: un toque desmutea.
+struct HoldMuteButton: View {
+    @ObservedObject var p: Param
+    let size: CGFloat
+    @State private var pressing = false
+    @State private var progress: CGFloat = 0
+
+    init(addr: String, size: CGFloat) {
+        _p = ObservedObject(wrappedValue: Store.shared.param(addr))
+        self.size = size
+    }
+
+    var body: some View {
+        let muted = (p.int ?? 1) == 0
+        if muted {
+            Pill(text: "MUTE", active: true, activeColor: C.mute, style: .mute, size: size) {
+                Store.shared.set(p.address, .i(1))
+            }
+        } else {
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 10).fill(C.surface2)
+                GeometryReader { g in
+                    RoundedRectangle(cornerRadius: 10).fill(C.mute.opacity(0.75)).frame(width: g.size.width * progress)
+                }
+                RoundedRectangle(cornerRadius: 10).stroke(C.line, lineWidth: 1)
+                Text(pressing ? "MANTENÉ…" : "MUTE").font(bf(size)).foregroundColor(C.text).frame(maxWidth: .infinity)
+            }
+            .contentShape(Rectangle())
+            .onLongPressGesture(minimumDuration: 2, maximumDistance: 40, perform: {
+                Store.shared.set(p.address, .i(0))
+                pressing = false
+                progress = 0
+            }, onPressingChanged: { down in
+                pressing = down
+                if down {
+                    withAnimation(.linear(duration: 2)) { progress = 1 }
+                } else {
+                    withAnimation(.easeOut(duration: 0.15)) { progress = 0 }
+                }
+            })
+        }
+    }
+}
+
 struct DetailPanel: View {
     let strip: Strip
     let section: Section
+    @Environment(\.verticalSizeClass) private var vsc
 
     var body: some View {
+        // En celular (pantalla baja) también se puede desplazar en horizontal, así nada queda cortado.
+        let axes: Axis.Set = vsc == .compact ? [.vertical, .horizontal] : .vertical
         switch section {
-        case .config: ScrollView { ConfigPanel(strip: strip).padding(16) }
-        case .gate: ScrollView { GatePanel(prefix: strip.prefix).padding(16) }
-        case .dyn: ScrollView { DynPanel(prefix: strip.prefix).padding(16) }
+        case .config: ScrollView(axes) { ConfigPanel(strip: strip).padding(16) }
+        case .gate: ScrollView(axes) { GatePanel(prefix: strip.prefix).padding(16) }
+        case .dyn: ScrollView(axes) { DynPanel(prefix: strip.prefix).padding(16) }
         case .eq: EqPanel(prefix: strip.prefix, bands: strip.kind == .ch ? 4 : 6, hpf: strip.kind == .ch, selIdx: strip.selIdx).padding(16)
         case .sends: SendsPanel(strip: strip).padding(12)
         }
@@ -116,6 +171,18 @@ struct ConfigPanel: View {
                     Spacer()
                     ParamToggle("MUTE", addr: strip.onAddr, invert: true, color: C.mute, style: .mute, size: 17).frame(width: 110, height: 50)
                     ParamToggle("SOLO", addr: strip.soloAddr, color: C.solo, size: 17).frame(width: 110, height: 50)
+                }
+                // LINK STEREO: une el canal con su par (1-2, 3-4…). En MEZCLA el par pasa a ser una sola tira.
+                if strip.kind == .ch {
+                    let odd = strip.idx % 2 == 1 ? strip.idx : strip.idx - 1
+                    if odd + 1 <= c.channels {
+                        HStack(spacing: 14) {
+                            ParamToggle("LINK STEREO  \(odd)-\(odd + 1)", addr: chLinkAddr(odd), color: C.sends, size: 15).frame(width: 230, height: 46)
+                            Text("Une los dos canales: fader, mute y EQ van juntos y en MEZCLA se ven como una sola tira.")
+                                .font(bf(12)).foregroundColor(C.dim).lineLimit(2)
+                        }
+                        .padding(.top, 4)
+                    }
                 }
                 // Paleta de color (la misma de la consola): fila de llenos y fila de contorno.
                 Text("COLOR").font(bf(12)).kerning(1.4).foregroundColor(C.dim).padding(.top, 6)
@@ -370,11 +437,13 @@ struct EqPanel: View {
     @State private var selected = 1
     @State private var rta = eqRtaOn
     @State private var confirmReset = false
+    @Environment(\.verticalSizeClass) private var vsc
     private let eqTypes = ["LCut", "LShv", "PEQ", "VEQ", "HShv", "HCut"]
 
     var body: some View {
         let names = bands == 4 ? ["LOW", "LO MID", "HI MID", "HIGH"] : ["LOW", "LOW 2", "LO MID", "HI MID", "HIGH 2", "HIGH"]
-        VStack(spacing: 10) {
+        VStack(spacing: vsc == .compact ? 4 : 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 OnOff(addr: "\(prefix)/eq/on").frame(width: 110, height: 44)
                 Spacer().frame(width: 12)
@@ -392,7 +461,10 @@ struct EqPanel: View {
                 }.frame(width: 64, height: 40)
                 Pill(text: "RESET", style: .outline, size: 14) { confirmReset = true }.frame(width: 80, height: 40)
             }
+            }
+            .frame(height: 46)
             EqGraphView(prefix: prefix, bands: bands, hpf: hpf, selected: $selected, rtaOn: rta)
+            ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
                 if selected == 0 {
                     ParamToggle("LOW CUT", addr: "\(prefix)/preamp/hpon", size: 16).frame(width: 120, height: 48)
@@ -404,10 +476,11 @@ struct EqPanel: View {
                     KnobView(Spec(label: "GAIN", addr: "\(e)/g", def: 0.5, bipolar: true) { Fmt.db(Fmt.lin(-15, 15, $0)) })
                     KnobView(Spec(label: "Q", addr: "\(e)/q", def: 0.5) { Fmt.num(Fmt.log(10, 0.3, $0)) })
                 }
-                Spacer()
             }
             .id(selected)
             .padding(.horizontal, 14)
+            .frame(height: 90)
+            }
             .frame(height: 90)
             .background(RoundedRectangle(cornerRadius: 14).fill(C.surface))
         }
@@ -529,6 +602,8 @@ struct FxEditor: View {
     let n: Int
     @ObservedObject var type: Param
 
+    @Environment(\.verticalSizeClass) private var vsc
+
     init(n: Int) {
         self.n = n
         _type = ObservedObject(wrappedValue: Store.shared.param("/fx/\(n)/type"))
@@ -539,7 +614,7 @@ struct FxEditor: View {
         let rtn = Fx.returnPrefix(n)
         let abbr = type.int.flatMap { Fx.abbrOf(n, $0) }
         let pars = Fx.params(abbr)
-        ScrollView {
+        ScrollView(vsc == .compact ? [.vertical, .horizontal] : .vertical) {
             VStack(spacing: 14) {
                 Card(title: "FX \(n)") {
                     HStack(spacing: 14) {

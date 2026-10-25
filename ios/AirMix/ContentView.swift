@@ -8,6 +8,7 @@ enum Tab: String, CaseIterable {
 struct ContentView: View {
     @ObservedObject private var core = Core.shared
     @Environment(\.horizontalSizeClass) private var hsc
+    @Environment(\.verticalSizeClass) private var vsc
     @State private var tab = Tab.mix
     @State private var layerIdx = 0
     @State private var sends = SendTarget.main
@@ -17,7 +18,9 @@ struct ContentView: View {
     @State private var showConnect = false
     @State private var confirmReset = false
 
+    /// compact: iPhone angosto (tiras con scroll). small: cualquier pantalla baja (celular en horizontal): interfaz compacta.
     private var compact: Bool { hsc == .compact }
+    private var small: Bool { compact || vsc == .compact }
 
     var body: some View {
         let layers = buildLayers()
@@ -25,12 +28,25 @@ struct ContentView: View {
             topBar
             HStack(spacing: 0) {
                 rail(layers)
-                ZStack(alignment: .trailing) {
+                if small {
+                    // Celular: no hay lugar para correr las tiras; el panel va encima.
+                    ZStack(alignment: .trailing) {
+                        content(layers)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        if showNotes {
+                            NotesPanel { showNotes = false }
+                                .frame(width: 320)
+                                .padding(6)
+                                .transition(.move(edge: .trailing))
+                        }
+                    }
+                } else {
+                    // Tablet: el panel ocupa su lugar y las tiras se angostan hacia la izquierda (no quedan tapadas).
                     content(layers)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     if showNotes {
                         NotesPanel { showNotes = false }
-                            .frame(width: compact ? 320 : 420)
+                            .frame(width: 420)
                             .padding(8)
                             .transition(.move(edge: .trailing))
                     }
@@ -41,7 +57,10 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
         .sheet(isPresented: $showConnect) { ConnectSheet() }
-        .onAppear { if UserDefaults.standard.string(forKey: "ip") == nil { showConnect = true } }
+        .onAppear {
+            if UserDefaults.standard.string(forKey: "ip") == nil { showConnect = true }
+            debugSetup()
+        }
         .onChange(of: core.layoutVersion) { _ in
             layerIdx = 0
             detail = nil
@@ -52,35 +71,38 @@ struct ContentView: View {
     // MARK: barra superior
 
     private var topBar: some View {
-        HStack(spacing: compact ? 6 : 10) {
+        HStack(spacing: small ? 5 : 10) {
             // Logo 8C (curva EQ + "airmix"), mismo vector que el ícono. Generado por tools/logo/gen.py.
             Image("Logo")
                 .resizable()
                 .scaledToFit()
-                .frame(height: compact ? 22 : 28)
+                .frame(height: small ? 20 : 28)
                 .accessibilityLabel("AirMix")
             // Versión instalada (sale de CFBundleShortVersionString, así siempre coincide).
             Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
-                .font(bf(11)).foregroundColor(C.dim).padding(.top, 8)
-            Spacer().frame(width: compact ? 4 : 18)
+                .font(bf(small ? 9 : 11)).foregroundColor(C.dim).padding(.top, small ? 6 : 8)
+            Spacer().frame(width: small ? 2 : 18)
             ForEach(Tab.allCases, id: \.self) { t in
-                Pill(text: t.rawValue, active: tab == t, style: .tab, size: compact ? 12 : 15) { tab = t }
-                    .frame(width: compact ? 84 : 120, height: 38)
+                Pill(text: t.rawValue, active: tab == t, style: .tab, size: small ? 11 : 15) { tab = t }
+                    .frame(width: small ? 76 : 120, height: small ? 32 : 38)
             }
             Spacer(minLength: 0)
+            SoloChip(small: small)
             Button { showConnect = true } label: {
                 Text(core.connected ? "●  \(core.console.model)  \(core.client.host ?? "")" : "●  SIN CONEXIÓN")
-                    .font(bf(compact ? 11 : 14))
+                    .font(bf(small ? 11 : 14))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .foregroundColor(core.connected ? C.green : C.red)
-                    .padding(.horizontal, 12)
-                    .frame(height: 38)
+                    .padding(.horizontal, small ? 8 : 12)
+                    .frame(height: small ? 32 : 38)
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(C.line))
             }
             .buttonStyle(.plain)
+            .layoutPriority(1)
         }
-        .padding(.horizontal, 12)
-        .frame(height: compact ? 48 : 58)
+        .padding(.horizontal, small ? 8 : 12)
+        .frame(height: small ? 42 : 58)
         .background(C.top)
     }
 
@@ -92,12 +114,12 @@ struct ContentView: View {
                 let t = ShowTimer.elapsed()
                 VStack(spacing: 0) {
                     Text("SHOW").font(bf(10)).foregroundColor(C.dim)
-                    Text(ShowTimer.format(t)).font(.system(size: compact ? 18 : 22, weight: .bold, design: .monospaced))
+                    Text(ShowTimer.format(t)).font(.system(size: small ? 17 : 22, weight: .bold, design: .monospaced))
                         .foregroundColor(ShowTimer.running ? C.green : (t > 0 ? C.solo : C.dim))
-                    if !compact { Text("tocá: ▶ / ❚❚").font(bf(9)).foregroundColor(C.tick) }
+                    if !small { Text("tocá: ▶ / ❚❚").font(bf(9)).foregroundColor(C.tick) }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, small ? 3 : 6)
                 .background(RoundedRectangle(cornerRadius: 12).fill(C.surface))
             }
             .onTapGesture { ShowTimer.toggle() }
@@ -109,31 +131,25 @@ struct ContentView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 6) {
                     ForEach(layers) { l in
-                        Pill(text: l.label, active: tab == .mix && layerIdx == l.id, activeColor: Sector.of(l.kind), style: .nav, size: compact ? 12 : 14, idleColor: Sector.of(l.kind)) {
+                        Pill(text: l.label, active: tab == .mix && layerIdx == l.id, activeColor: Sector.of(l.kind), style: .nav, size: small ? 11 : 14, idleColor: Sector.of(l.kind)) {
                             layerIdx = l.id
                             tab = .mix
                             detail = nil
                         }
-                        .frame(height: compact ? 40 : 48)
+                        .frame(height: small ? 34 : 48)
                     }
                 }
             }
 
-            Pill(text: "✎ NOTAS", active: showNotes, style: .outline, size: 14) {
+            Pill(text: "✎ NOTAS", active: showNotes, style: .outline, size: small ? 12 : 14) {
                 withAnimation(.easeOut(duration: 0.2)) { showNotes.toggle() }
             }
-            .frame(height: 42)
+            .frame(height: small ? 34 : 42)
 
-            FxMuteButton().id(core.layoutVersion).frame(height: compact ? 60 : 74)
-
-            Pill(text: "CLR SOLO", style: .outline, size: 13) {
-                let n = core.console.isX32 ? 80 : 36
-                for i in 1...n { Store.shared.set("/-stat/solosw/\(Fmt.two(i))", .i(0)) }
-            }
-            .frame(height: 40)
+            FxMuteButton().id(core.layoutVersion).frame(height: small ? 50 : 74)
         }
-        .padding(10)
-        .frame(width: compact ? 96 : 120)
+        .padding(small ? 6 : 10)
+        .frame(width: small ? 90 : 120)
         .background(C.top)
     }
 
@@ -145,7 +161,16 @@ struct ContentView: View {
         case .mix:
             if let d = detail { detailView(d) } else { mixView(layers) }
         case .fx: EffectsView()
-        case .meters: AllMetersView()
+        case .meters:
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Pill(text: "CLR SOLO", style: .outline, size: small ? 12 : 14) { clearSolos() }
+                        .frame(width: small ? 100 : 120, height: small ? 32 : 40)
+                }
+                .padding(.horizontal, 16).padding(.top, 6)
+                AllMetersView()
+            }
         case .scenes: ScenesView()
         }
     }
@@ -157,7 +182,7 @@ struct ContentView: View {
         return VStack(spacing: 0) {
             HStack(spacing: 10) {
                 if sends != .main {
-                    SendTargetName(target: sends, prefix: "SENDS ON FADER  →  ", inkOnColor: true).font(bf(compact ? 15 : 20))
+                    SendTargetName(target: sends, prefix: "SENDS ON FADER  →  ", inkOnColor: true).font(bf(small ? 13 : 20)).lineLimit(1).minimumScaleFactor(0.7)
                     Spacer()
                     sendsMenu(label: "CAMBIAR ▾", dark: true)
                     Button { sends = .main } label: {
@@ -166,13 +191,13 @@ struct ContentView: View {
                     }.buttonStyle(.plain)
                 } else {
                     RoundedRectangle(cornerRadius: 3).fill(Sector.of(layer?.kind ?? .ch)).frame(width: 6, height: 26)
-                    Text(layer?.label ?? "").font(bf(compact ? 16 : 20)).foregroundColor(Sector.of(layer?.kind ?? .ch))
+                    Text(layer?.label ?? "").font(bf(small ? 14 : 20)).foregroundColor(Sector.of(layer?.kind ?? .ch))
                     Spacer()
                     sendsMenu(label: "SENDS ON FADER ▾", dark: false)
                 }
             }
-            .padding(.horizontal, 16)
-            .frame(height: compact ? 46 : 54)
+            .padding(.horizontal, small ? 10 : 16)
+            .frame(height: small ? 36 : 54)
             .background(SendTargetBackground(target: sends))
 
             HStack(spacing: 4) {
@@ -185,15 +210,17 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    ForEach(0..<8, id: \.self) { i in
+                    // Capas de canales: tantas tiras como haya (un par linkeado ocupa un lugar). El resto: 8 lugares fijos.
+                    let slots = layer?.kind == .ch ? strips.count : 8
+                    ForEach(0..<slots, id: \.self) { i in
                         if i < strips.count {
-                            StripView(strip: strips[i], target: sends) { openDetail($0) }.frame(maxWidth: .infinity)
+                            StripView(strip: strips[i], target: sends, compact: small) { openDetail($0) }.frame(maxWidth: .infinity)
                         } else {
                             Color.clear.frame(maxWidth: .infinity)
                         }
                     }
                 }
-                StripView(strip: master, target: .main, compact: compact) { openDetail($0) }
+                StripView(strip: master, target: .main, compact: small) { openDetail($0) }
                     .frame(width: compact ? 104 : nil)
                     .frame(maxWidth: compact ? 104 : .infinity)
                     .padding(.leading, 8)
@@ -224,6 +251,33 @@ struct ContentView: View {
         detail = s
     }
 
+    /// CLR SOLO: apaga todos los solos (vive en MEDIDORES y en el aviso "● SOLO" de arriba).
+    private func clearSolos() {
+        let n = core.console.isX32 ? 80 : 36
+        for i in 1...n { Store.shared.set("/-stat/solosw/\(Fmt.two(i))", .i(0)) }
+        Store.shared.set("/-stat/solo", .i(0))
+    }
+
+    /// Solo para las capturas automáticas de CI: argumento de lanzamiento -debugScreen (mezcla / notas / link / config).
+    private func debugSetup() {
+        guard let screen = UserDefaults.standard.string(forKey: "debugScreen") else { return }
+        let names = ["VOZ GARKO", "VOZ PALMI", "GUITARRA", "BAJO", "TECLADO L", "TECLADO R", "PISTA L", "PISTA R"]
+        for i in 1...8 {
+            Store.shared.incoming("/ch/\(Fmt.two(i))/config/name", .s(names[i - 1]))
+            Store.shared.incoming("/ch/\(Fmt.two(i))/config/color", .i(Int32(i % 7 + 1)))
+            Store.shared.incoming("/ch/\(Fmt.two(i))/mix/fader", .f(0.55 + Float(i) * 0.03))
+            Store.shared.incoming("/ch/\(Fmt.two(i))/mix/on", .i(1))
+        }
+        Store.shared.incoming("/lr/mix/fader", .f(0.75))
+        Store.shared.incoming("/lr/mix/on", .i(1))
+        switch screen {
+        case "notas": showNotes = true
+        case "link": Store.shared.incoming(chLinkAddr(7), .i(1))
+        case "config": detail = Strip(kind: .ch, idx: 1)
+        default: break
+        }
+    }
+
     private func detailView(_ s: Strip) -> some View {
         let secs = sectionsFor(s)
         let sec = secs.contains(section) ? section : secs[0]
@@ -244,7 +298,7 @@ struct ContentView: View {
             .background(C.panel)
 
             HStack(spacing: 4) {
-                StripView(strip: s, target: .main, compact: compact) { _ in }.frame(width: compact ? 104 : 130)
+                StripView(strip: s, target: .main, compact: small) { _ in }.frame(width: small ? 96 : 130)
                 DetailPanel(strip: s, section: sec)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(RoundedRectangle(cornerRadius: 14).fill(C.panel))
@@ -256,8 +310,24 @@ struct ContentView: View {
 
     private func step(_ s: Strip, _ dir: Int) {
         let list = stripsOfKind(s.kind)
-        guard let i = list.firstIndex(of: s), !list.isEmpty else { return }
+        guard let i = list.firstIndex(of: Strip(kind: s.kind, idx: s.idx)), !list.isEmpty else { return }
         detail = list[(i + dir + list.count) % list.count]
+    }
+}
+
+/// Aviso de solo prendido: aparece solo si la consola dice que hay algún solo; tocarlo los apaga todos.
+struct SoloChip: View {
+    let small: Bool
+    @ObservedObject var p = Store.shared.param("/-stat/solo")
+    var body: some View {
+        if (p.int ?? 0) != 0 {
+            Pill(text: "● SOLO", active: true, activeColor: C.solo, size: small ? 11 : 14) {
+                let n = Core.shared.console.isX32 ? 80 : 36
+                for i in 1...n { Store.shared.set("/-stat/solosw/\(Fmt.two(i))", .i(0)) }
+                Store.shared.set("/-stat/solo", .i(0))
+            }
+            .frame(width: small ? 70 : 96, height: small ? 32 : 38)
+        }
     }
 }
 
@@ -625,6 +695,7 @@ struct ScenesView: View {
     @State private var pending: Scenes.SceneFile?
     @State private var confirmLoad = false
     @State private var toDelete: URL?
+    @State private var showAbout = false
 
     private func files() -> [URL] {
         _ = scenes.libraryVersion
@@ -656,6 +727,10 @@ struct ScenesView: View {
                     Text(scenes.status).font(bf(15)).foregroundColor(C.text)
                 }
                 Spacer(minLength: 0)
+                HStack {
+                    Pill(text: "ACERCA DE", style: .outline, size: 12) { showAbout = true }.frame(width: 130, height: 36)
+                    Spacer()
+                }
             }
             .frame(maxWidth: .infinity)
 
@@ -710,6 +785,7 @@ struct ScenesView: View {
             pending = scene
             confirmLoad = true
         }
+        .sheet(isPresented: $showAbout) { AboutView() }
         .fileExporter(isPresented: $exporting, document: exportDoc, contentType: .data, defaultFilename: exportName + ".scn") { _ in }
         .onChange(of: scenes.exportText) { t in
             if let t = t {
@@ -735,5 +811,35 @@ struct ScenesView: View {
                 scenes.libraryVersion += 1
             }
         }
+    }
+}
+
+/// ACERCA DE: autoría, contacto y créditos.
+struct AboutView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    var body: some View {
+        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Image("Logo").resizable().scaledToFit().frame(height: 34)
+                Text("AirMix \(ver)").font(bf(18)).foregroundColor(C.text)
+                Text("Creada por Joaquín Nachman · 2026").font(bf(16)).foregroundColor(C.text)
+                Button { openURL(URL(string: "https://instagram.com/joaquinnachman")!) } label: {
+                    Text("Instagram: @joaquinnachman").font(bf(15)).foregroundColor(C.accent)
+                }
+                Button { openURL(URL(string: "mailto:joaquinnachman@gmail.com?subject=AirMix%20\(ver)")!) } label: {
+                    Text("Errores y sugerencias: joaquinnachman@gmail.com").font(bf(15)).foregroundColor(C.accent)
+                }
+                Text("App independiente, compatible con consolas Behringer X Air y X32. No está afiliada a Behringer ni a Music Tribe.")
+                    .font(bf(13)).foregroundColor(C.dim)
+                Text("Tablas de efectos y formato de escenas basados en el trabajo de Patrick-Gilles Maillot. Tipografía del logo: Unbounded (SIL OFL).")
+                    .font(bf(13)).foregroundColor(C.dim)
+                Pill(text: "Cerrar", style: .outline, size: 15) { dismiss() }.frame(width: 120, height: 44)
+            }
+            .padding(24)
+        }
+        .background(C.panel.ignoresSafeArea())
+        .preferredColorScheme(.dark)
     }
 }

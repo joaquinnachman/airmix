@@ -74,6 +74,14 @@ object Sector {
 val FONT: Typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
 val FONT_MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
+/** Pantalla chica (celular): se compacta la interfaz. Se decide en MainActivity según la altura. */
+object Layout {
+    var compact = false
+}
+
+/** Valor normal o compacto según la pantalla. */
+fun <T> sz(normal: T, compact: T): T = if (Layout.compact) compact else normal
+
 const val MATCH = -1
 const val WRAP = -2
 
@@ -115,6 +123,15 @@ fun Context.scroll(v: View): ScrollView = ScrollView(this).apply {
     addView(v, FrameLayout.LayoutParams(MATCH, WRAP))
 }
 
+/** En celular, envuelve en scroll horizontal para que nada quede cortado. */
+fun Context.hwrap(v: View): View {
+    if (!Layout.compact) return v
+    val h = android.widget.HorizontalScrollView(this)
+    h.isHorizontalScrollBarEnabled = false
+    h.addView(v, FrameLayout.LayoutParams(WRAP, WRAP))
+    return h
+}
+
 fun Context.rounded(color: Int, radiusDp: Int = 10, strokeColor: Int = 0): GradientDrawable =
     GradientDrawable().apply {
         setColor(color)
@@ -134,7 +151,7 @@ fun Context.sectionTitle(s: String): TextView = label(s, 13f, C.TEXT_DIM, Gravit
 
 enum class BtnStyle { NAV, TAB, LIGHT, MUTE, SMALL, OUTLINE }
 
-class Btn(ctx: Context, label: String, private val style: BtnStyle = BtnStyle.LIGHT, sp: Float = 16f) : TextView(ctx) {
+open class Btn(ctx: Context, label: String, private val style: BtnStyle = BtnStyle.LIGHT, sp: Float = 16f) : TextView(ctx) {
     var activeColor = C.ACCENT
     /** Color del texto cuando no está activo (0 = el del estilo). */
     var idleText = 0

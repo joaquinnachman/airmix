@@ -8,6 +8,7 @@ struct FaderView: View {
     @State private var lastTap = Date.distantPast
 
     private static let marks: [(Float, String)] = [(10, "+10"), (5, "+5"), (0, "0"), (-5, "-5"), (-10, "-10"), (-20, "-20"), (-30, "-30"), (-40, "-40"), (-60, "-60")]
+    private static let labelOrder = [2, 8, 0, 5, 4, 7, 1, 6, 3]
 
     init(addr: String, fill: Color) {
         _p = ObservedObject(wrappedValue: Store.shared.param(addr))
@@ -26,10 +27,16 @@ struct FaderView: View {
                 let cx = size.width * 0.62
                 let tw: CGFloat = 6
                 let lx = cx - 16
-                for (db, lbl) in FaderView.marks {
+                // Etiquetas por prioridad: si el fader es corto solo entran algunas (no se enciman).
+                var drawnY: [CGFloat] = []
+                for i in FaderView.labelOrder {
+                    let (db, lbl) = FaderView.marks[i]
                     let y = bottom - CGFloat(Fmt.dbToFader(db)) * travel
-                    ctx.draw(Text(lbl).font(bf(9)).foregroundColor(db == 0 ? C.text : C.tick), at: CGPoint(x: lx, y: y), anchor: .trailing)
                     ctx.fill(Path(CGRect(x: lx + 3, y: y - 0.5, width: max(cx - tw / 2 - 3 - lx - 3, 0), height: 1)), with: .color(db == 0 ? C.text : C.tick))
+                    if drawnY.allSatisfy({ abs($0 - y) >= 12 }) {
+                        ctx.draw(Text(lbl).font(bf(9)).foregroundColor(db == 0 ? C.text : C.tick), at: CGPoint(x: lx, y: y), anchor: .trailing)
+                        drawnY.append(y)
+                    }
                 }
                 ctx.fill(Path(roundedRect: CGRect(x: cx - tw / 2, y: top - 4, width: tw, height: travel + 8), cornerRadius: tw / 2), with: .color(C.meterBg))
                 let y = bottom - CGFloat(value) * travel

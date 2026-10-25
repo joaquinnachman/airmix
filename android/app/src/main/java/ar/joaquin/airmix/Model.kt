@@ -80,8 +80,12 @@ data class SendTarget(val bus: Int = 0, val fx: Int = 0) {
     }
 }
 
-/** Un canal/bus/master con todas sus direcciones OSC según la consola conectada. */
-data class Strip(val kind: Kind, val idx: Int = 1) {
+/**
+ * Un canal/bus/master con todas sus direcciones OSC según la consola conectada.
+ * pair = true: par estéreo linkeado (idx impar + el siguiente) mostrado como una sola tira.
+ * Todo se controla desde el canal impar; la consola copia al par.
+ */
+data class Strip(val kind: Kind, val idx: Int = 1, val pair: Boolean = false) {
     private val c: Console get() = App.console
 
     val prefix: String
@@ -98,7 +102,7 @@ data class Strip(val kind: Kind, val idx: Int = 1) {
 
     val title: String
         get() = when (kind) {
-            Kind.CH -> "CH ${Fmt.two(idx)}"
+            Kind.CH -> if (pair) "CH ${Fmt.two(idx)}-${Fmt.two(idx + 1)}" else "CH ${Fmt.two(idx)}"
             Kind.AUX -> if (c.auxIns > 1) "AUX $idx" else "AUX"
             Kind.RTN -> if (c.isX32) "FXR $idx" else "FX $idx"
             Kind.BUS -> "BUS $idx"
@@ -144,7 +148,7 @@ data class Strip(val kind: Kind, val idx: Int = 1) {
         }
 
     val meterR: Int
-        get() = if (c.isX32) when (kind) {
+        get() = if (kind == Kind.CH && pair) idx else if (c.isX32) when (kind) {
             Kind.LR -> 71
             else -> -1
         } else when (kind) {
@@ -222,10 +226,35 @@ class Layer(val label: String, val strips: List<Strip>) {
     val kind: Kind get() = strips.firstOrNull()?.kind ?: Kind.CH
 }
 
+/** Pares estéreo de canales: dirección del link de la consola para el par que empieza en el impar n. */
+fun chLinkAddr(odd: Int): String = "/config/chlink/$odd-${odd + 1}"
+
+/** Pares posibles según la consola (1-2, 3-4…). */
+fun chLinkPairs(): List<Int> = (1 until App.console.channels step 2).toList()
+
+/** Canales impares con link estéreo prendido (según lo último que dijo la consola). */
+fun linkedPairs(): Set<Int> = chLinkPairs().filter { App.store.int(chLinkAddr(it), 0) != 0 }.toSet()
+
 fun buildLayers(): List<Layer> {
     val c = App.console
     val out = ArrayList<Layer>()
-    for (g in stripsOfKind(Kind.CH).chunked(8)) out.add(Layer("CH ${g.first().idx}-${g.last().idx}", g))
+    val links = linkedPairs()
+    // Capas fijas de 8 canales; dentro de cada una, los pares linkeados se juntan en una sola tira.
+    for (g in stripsOfKind(Kind.CH).chunked(8)) {
+        val merged = ArrayList<Strip>()
+        var k = 0
+        while (k < g.size) {
+            val s = g[k]
+            if (s.idx % 2 == 1 && s.idx in links && k + 1 < g.size) {
+                merged.add(Strip(Kind.CH, s.idx, pair = true))
+                k += 2
+            } else {
+                merged.add(s)
+                k++
+            }
+        }
+        out.add(Layer("CH ${g.first().idx}-${g.last().idx}", merged))
+    }
     out.add(Layer(if (c.auxIns > 1) "AUX IN" else "AUX", stripsOfKind(Kind.AUX)))
     out.add(Layer("FX RTN", stripsOfKind(Kind.RTN)))
     val buses = stripsOfKind(Kind.BUS)

@@ -33,6 +33,17 @@ jobs:
         with:
           name: android
           path: AirMix.apk
+      - name: Capturas (celular y tablet, Robolectric)
+        continue-on-error: true
+        run: |
+          cd android
+          ./gradlew testDebugUnitTest --tests '*ScreensTest*' > test.log 2>&1 || (tail -n 60 test.log; grep -E "Exception|Error" test.log | head -n 20 | while IFS= read -r l; do echo "::warning::$l"; done)
+          mkdir -p ../screens && for f in app/build/screens/*.png; do cp "$f" "../screens/android-$(basename "$f")"; done; ls ../screens
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screens-android
+          path: screens/*.png
+          if-no-files-found: ignore
 
   ios:
     runs-on: macos-15
@@ -65,6 +76,38 @@ jobs:
         with:
           name: ios
           path: AirMix-unsigned.ipa
+      - name: Capturas (iPhone y iPad, simulador)
+        continue-on-error: true
+        run: |
+          cd ios
+          xcodebuild -project AirMix.xcodeproj -scheme AirMix -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build > sim.log 2>&1 || { tail -n 30 sim.log; exit 1; }
+          APP=simbuild/Build/Products/Debug-iphonesimulator/AirMix.app
+          mkdir -p ../screens
+          shoot() {
+            NAME=$1; TYPE=$2
+            UDID=$(xcrun simctl create "$NAME" "$TYPE") || return 0
+            xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b > /dev/null
+            xcrun simctl install "$UDID" "$APP"
+            for S in mezcla notas link config; do
+              xcrun simctl launch "$UDID" ar.joaquin.airmix -ip 10.255.255.1 -debugScreen "$S" > /dev/null
+              sleep 7
+              xcrun simctl io "$UDID" screenshot "../screens/ios-$NAME-$S.png"
+              xcrun simctl terminate "$UDID" ar.joaquin.airmix || true
+            done
+            xcrun simctl shutdown "$UDID" || true
+          }
+          PHONE=$(xcrun simctl list devicetypes | grep -E "^iPhone 1[5-7] Pro \(" | head -n 1 | sed -E 's/ \(.*//')
+          PAD=$(xcrun simctl list devicetypes | grep -E "^iPad Air 11-inch|^iPad \(" | head -n 1 | sed -E 's/ \(com.*//')
+          echo "Celular: $PHONE / Tablet: $PAD"
+          shoot celular "$PHONE"
+          shoot tablet "$PAD"
+          ls ../screens
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screens-ios
+          path: screens/*.png
+          if-no-files-found: ignore
 
   release:
     needs: [android, ios]
@@ -80,3 +123,5 @@ jobs:
           files: |
             android/AirMix.apk
             ios/AirMix-unsigned.ipa
+            screens-android/*.png
+            screens-ios/*.png

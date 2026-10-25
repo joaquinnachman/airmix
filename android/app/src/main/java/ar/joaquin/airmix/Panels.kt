@@ -16,33 +16,34 @@ import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 
-/** Tira de canal (igual en HOME y en el detalle). */
+/** Tira de canal (igual en HOME y en el detalle). En celular se compacta para que el fader tenga recorrido. */
 fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): View {
     val col = col()
     col.setBackgroundColor(C.STRIP)
+    val k = Layout.compact
 
-    col.addView(label(s.title, 12f, Sector.of(s.kind)), lp(MATCH, dp(24)).m(t = dp(6)))
+    col.addView(label(s.title, sz(12f, 10f), Sector.of(s.kind)), lp(MATCH, dp(sz(24, 16))).m(t = dp(sz(6, 3))))
 
-    val name = label(s.title, 15f)
+    val name = label(s.title, sz(15f, 12f))
     name.setPadding(dp(4), 0, dp(4), 0)
     applyScribble(name, 0)
     name.setOnClickListener { onOpen(s) }
     name.bind(s.nameAddr) { v -> name.text = v.toString().ifEmpty { s.title } }
     name.bind(s.colorAddr) { v -> applyScribble(name, v.asI()) }
-    col.addView(name, lp(MATCH, dp(36)).m(dp(8), 0, dp(8), dp(6)))
+    col.addView(name, lp(MATCH, dp(sz(36, 26))).m(dp(sz(8, 4)), 0, dp(sz(8, 4)), dp(sz(6, 3))))
 
     val pan = s.panAddr
-    if (pan != null) col.addView(PanView(this, pan), lp(MATCH, dp(30)))
-    else col.addView(View(this), lp(MATCH, dp(30)))
+    if (pan != null) col.addView(PanView(this, pan), lp(MATCH, dp(sz(30, 20))))
+    else col.addView(View(this), lp(MATCH, dp(sz(30, 20))))
 
     val sendAddr = s.sendAddr(target)
     val faderAddr = sendAddr ?: s.faderAddr
     val info = row()
-    info.setPadding(dp(8), 0, dp(8), 0)
-    info.addView(toggle("S", s.soloAddr, BtnStyle.SMALL, color = C.SOLO, sp = 15f), lp(dp(38), dp(32)))
-    val dbText = label("", 14f, if (sendAddr != null) C.SENDS else C.TEXT, Gravity.END or Gravity.CENTER_VERTICAL)
-    info.addView(dbText, lp(0, dp(32), 1f))
-    col.addView(info, lp(MATCH, dp(40)))
+    info.setPadding(dp(sz(8, 4)), 0, dp(sz(8, 4)), 0)
+    info.addView(toggle("S", s.soloAddr, BtnStyle.SMALL, color = C.SOLO, sp = sz(15f, 12f)), lp(dp(sz(38, 28)), dp(sz(32, 24))))
+    val dbText = label("", sz(14f, 11f), if (sendAddr != null) C.SENDS else C.TEXT, Gravity.END or Gravity.CENTER_VERTICAL)
+    info.addView(dbText, lp(0, dp(sz(32, 24)), 1f))
+    col.addView(info, lp(MATCH, dp(sz(40, 28))))
 
     val faderRow = row()
     val fader = FaderView(this)
@@ -67,17 +68,97 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     }
     faderRow.addView(fader, lp(0, MATCH, 1f))
     if (s.meterL >= 0) {
+        val stereo = s.meterR >= 0
         faderRow.addView(
             MeterView(this, s.meterL, s.meterR),
-            lp(dp(if (s.meterR >= 0) 12 else 7), MATCH).m(t = dp(18), r = dp(10), b = dp(18))
+            lp(dp(if (stereo) sz(12, 12) else sz(7, 8)), MATCH).m(t = dp(sz(18, 8)), r = dp(sz(10, 4)), b = dp(sz(18, 8)))
         )
     }
     col.addView(faderRow, lp(MATCH, 0, 1f))
-    col.addView(
-        toggle("MUTE", s.onAddr, BtnStyle.MUTE, invert = true, color = C.MUTE, sp = 18f),
-        lp(MATCH, dp(48)).m(dp(8), dp(6), dp(8), dp(10))
-    )
+    // MAIN LR: mutear exige mantener apretado 2 s (para no mutear el PA sin querer). Desmutear: un toque.
+    val mute: View = if (s.kind == Kind.LR) HoldMuteBtn(this, s.onAddr, sz(18f, 13f))
+    else toggle("MUTE", s.onAddr, BtnStyle.MUTE, invert = true, color = C.MUTE, sp = sz(18f, 13f))
+    col.addView(mute, lp(MATCH, dp(sz(48, 34))).m(dp(sz(8, 4)), dp(sz(6, 3)), dp(sz(8, 4)), dp(sz(10, 5))))
+    if (k) col.setPadding(0, 0, 0, 0)
     return col
+}
+
+/**
+ * MUTE con retención: hay que mantenerlo apretado 2 s para mutear (se llena una barra; si soltás antes, se cancela).
+ * Si ya está muteado, un toque lo desmutea.
+ */
+class HoldMuteBtn(ctx: Context, private val addr: String, sp: Float) : Btn(ctx, "MUTE", BtnStyle.MUTE, sp) {
+    private var progress = 0f
+    private var start = 0L
+    private var holding = false
+    private val p = android.graphics.Paint()
+    private val tick = object : Runnable {
+        override fun run() {
+            if (!holding) return
+            progress = ((android.os.SystemClock.uptimeMillis() - start) / HOLD_MS.toFloat()).coerceIn(0f, 1f)
+            invalidate()
+            if (progress >= 1f) {
+                holding = false
+                progress = 0f
+                text = "MUTE"
+                App.store.set(addr, 0)
+                performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            } else {
+                postOnAnimation(this)
+            }
+        }
+    }
+
+    init {
+        activeColor = C.MUTE
+        bind(addr) { v -> active = v.asI() == 0 }
+    }
+
+    private fun muted() = App.store.int(addr, 1) == 0
+
+    override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
+        when (e.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
+                if (!muted()) {
+                    holding = true
+                    start = android.os.SystemClock.uptimeMillis()
+                    text = "MANTENÉ…"
+                    postOnAnimation(tick)
+                }
+            }
+            android.view.MotionEvent.ACTION_UP -> {
+                if (holding) {
+                    holding = false
+                    progress = 0f
+                    text = "MUTE"
+                    invalidate()
+                } else if (muted() && e.x in 0f..width.toFloat() && e.y in 0f..height.toFloat()) {
+                    App.store.set(addr, 1)
+                }
+            }
+            android.view.MotionEvent.ACTION_CANCEL -> {
+                holding = false
+                progress = 0f
+                text = "MUTE"
+                invalidate()
+            }
+        }
+        return true
+    }
+
+    override fun onDraw(c: android.graphics.Canvas) {
+        if (progress > 0f) {
+            p.color = C.MUTE
+            p.alpha = 170
+            c.drawRect(0f, 0f, width * progress, height.toFloat(), p)
+        }
+        super.onDraw(c)
+    }
+
+    companion object {
+        const val HOLD_MS = 2000L
+    }
 }
 
 object Panels {
@@ -86,16 +167,16 @@ object Panels {
     private val RATIOS = listOf("1.1", "1.3", "1.5", "2.0", "2.5", "3.0", "4.0", "5.0", "7.0", "10", "20", "100")
 
     fun build(ctx: Context, s: Strip, sec: Section): View = when (sec) {
-        Section.CONFIG -> ctx.scroll(config(ctx, s))
-        Section.GATE -> ctx.scroll(gate(ctx, s.prefix))
-        Section.DYN -> ctx.scroll(dyn(ctx, s.prefix))
+        Section.CONFIG -> ctx.scroll(ctx.hwrap(config(ctx, s)))
+        Section.GATE -> ctx.scroll(ctx.hwrap(gate(ctx, s.prefix)))
+        Section.DYN -> ctx.scroll(ctx.hwrap(dyn(ctx, s.prefix)))
         Section.EQ -> eq(ctx, s.prefix, if (s.kind == Kind.CH) 4 else 6, s.kind == Kind.CH, s.selIdx())
         Section.SENDS -> sends(ctx, s)
     }
 
     private fun Context.knob(spec: Spec): KnobView {
         val k = KnobView(this, spec)
-        k.layoutParams = lp(dp(190), dp(80))
+        k.layoutParams = lp(dp(sz(190, 160)), dp(sz(80, 66)))
         return k
     }
 
@@ -159,6 +240,21 @@ object Panels {
         r1.addView(toggle("MUTE", s.onAddr, BtnStyle.MUTE, invert = true, color = C.MUTE, sp = 18f), lp(dp(120), dp(52)))
         r1.addView(toggle("SOLO", s.soloAddr, color = C.SOLO, sp = 18f), lp(dp(120), dp(52)).m(l = dp(12)))
         idCard.addView(r1)
+
+        // LINK STEREO: une el canal con su par (1-2, 3-4…). En MEZCLA el par pasa a ser una sola tira.
+        if (s.kind == Kind.CH) {
+            val odd = if (s.idx % 2 == 1) s.idx else s.idx - 1
+            if (odd + 1 <= App.console.channels) {
+                val lr = row()
+                val link = toggle("LINK STEREO  ${odd}-${odd + 1}", chLinkAddr(odd), color = C.SENDS, sp = 16f)
+                lr.addView(link, lp(dp(240), dp(48)))
+                lr.addView(
+                    label("Une los dos canales: fader, mute y EQ van juntos y en MEZCLA se ven como una sola tira.", 13f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL).also { it.maxLines = 2 },
+                    lp(0, dp(48), 1f).m(l = dp(14))
+                )
+                idCard.addView(lr, lp(MATCH, WRAP).m(t = dp(12)))
+            }
+        }
 
         // Paleta de color (la misma de la consola): fila de llenos y fila de contorno.
         idCard.addView(sectionTitle("COLOR"), lp(MATCH, dp(20)).m(t = dp(14), b = dp(6)))
@@ -407,9 +503,9 @@ object Panels {
                 .show()
         }
         top.addView(rst, lp(dp(90), dp(42)))
-        root.addView(top)
-        root.addView(graph, lp(MATCH, 0, 1f).m(t = dp(10), b = dp(10)))
-        root.addView(bottom, lp(MATCH, dp(96)))
+        root.addView(hwrap(top))
+        root.addView(graph, lp(MATCH, 0, 1f).m(t = dp(sz(10, 4)), b = dp(sz(10, 4))))
+        root.addView(hwrap(bottom), lp(MATCH, dp(sz(96, 80))))
         select(1)
         // El RTA de la consola muestra el canal seleccionado: lo seleccionamos y pedimos el RTA mientras el EQ esté a la vista.
         root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
@@ -578,7 +674,7 @@ object Panels {
             label("Doble toque en una perilla = valor inicial. Los cambios van directo a la consola.", 13f, C.TEXT_DIM, Gravity.START),
             lp(MATCH, dp(24))
         )
-        scroll(root)
+        scroll(hwrap(root))
     }
 
     fun placeholder(ctx: Context, what: String): View = with(ctx) {

@@ -229,7 +229,9 @@ struct NameChip: View {
     @ObservedObject var name: Param
     @ObservedObject var color: Param
     let fallback: String
-    init(strip: Strip) {
+    var height: CGFloat = 34
+    init(strip: Strip, height: CGFloat = 34) {
+        self.height = height
         _name = ObservedObject(wrappedValue: Store.shared.param(strip.nameAddr))
         _color = ObservedObject(wrappedValue: Store.shared.param(strip.colorAddr))
         fallback = strip.title
@@ -240,11 +242,11 @@ struct NameChip: View {
         let filled = c < 8
         let n = name.value?.stringValue ?? ""
         Text(n.isEmpty ? fallback : n)
-            .font(bf(14))
+            .font(bf(height < 30 ? 12 : 14))
             .lineLimit(1)
             .minimumScaleFactor(0.6)
             .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
             .foregroundColor(filled ? ([0, 1, 4, 5].contains(c) ? .white : C.ink) : (c == 8 ? C.text : base))
             .background(RoundedRectangle(cornerRadius: 8).fill(filled ? base : Color.clear))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(filled ? Color.clear : (c == 8 ? C.dim : base), lineWidth: 1.5))
