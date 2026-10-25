@@ -262,7 +262,7 @@ struct DbLabel: View {
         self.color = color
     }
     var body: some View {
-        Text(Fmt.faderDb(p.float ?? 0)).font(bf(13)).foregroundColor(color).lineLimit(1).minimumScaleFactor(0.4).allowsTightening(true)
+        Text(Fmt.faderDb(p.float ?? 0)).font(bf(13)).foregroundColor(color).lineLimit(1).minimumScaleFactor(0.3).allowsTightening(true)
     }
 }
 

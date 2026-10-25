@@ -705,7 +705,7 @@ class MainActivity : Activity() {
             val b = Btn(this, t, BtnStyle.TAB, sz(16f, 14f))
             b.setOnClickListener { showNotesTab(i) }
             notesTabs.add(b)
-            head.addView(b, lp(dp(sz(80, 68)), dp(40)).m(r = dp(6)))
+            head.addView(b, lp(dp(sz(80, 62)), dp(40)).m(r = dp(6)))
         }
         head.addView(View(this), lp(0, 1, 1f))
         val mark = Btn(this, "+ MARCA", BtnStyle.LIGHT, sz(14f, 12f))
@@ -720,7 +720,7 @@ class MainActivity : Activity() {
                 .setOnDismissListener { hideBars() }
                 .show()
         }
-        head.addView(clear, lp(dp(sz(72, 62)), dp(40)).m(r = dp(6)))
+        head.addView(clear, lp(dp(sz(72, 60)), dp(40)).m(r = dp(6)))
         notesActions.add(mark)
         notesActions.add(clear)
         val close = Btn(this, "✕", BtnStyle.OUTLINE, 16f)
