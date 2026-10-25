@@ -15,6 +15,17 @@ android {
         versionName = "0.4.8"
     }
 
+    // Firma fija guardada en el repo: si cada compilación usara una clave nueva, Android rechaza la
+    // actualización ("conflicto con un paquete") y hay que desinstalar. No cambiar este archivo.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("airmix-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
