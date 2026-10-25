@@ -301,7 +301,7 @@ class MainActivity : Activity() {
         body.addView(host, lp(0, MATCH, 1f))
         if (Layout.compact) {
             // Celular: no hay lugar para correr las tiras; el panel va encima.
-            host.addView(notesPanel, FrameLayout.LayoutParams(dp(320), MATCH, Gravity.END))
+            host.addView(notesPanel, FrameLayout.LayoutParams(dp(372), MATCH, Gravity.END))
         } else {
             // Tablet: el panel ocupa su lugar y las tiras se angostan hacia la izquierda (no quedan tapadas).
             body.addView(notesPanel, lp(dp(420), MATCH))
@@ -702,16 +702,16 @@ class MainActivity : Activity() {
 
         val head = row()
         for ((i, t) in listOf("NOTAS", "TEMAS").withIndex()) {
-            val b = Btn(this, t, BtnStyle.TAB, 16f)
+            val b = Btn(this, t, BtnStyle.TAB, sz(16f, 14f))
             b.setOnClickListener { showNotesTab(i) }
             notesTabs.add(b)
-            head.addView(b, lp(dp(86), dp(40)).m(r = dp(6)))
+            head.addView(b, lp(dp(sz(80, 68)), dp(40)).m(r = dp(6)))
         }
         head.addView(View(this), lp(0, 1, 1f))
-        val mark = Btn(this, "+ MARCA", BtnStyle.LIGHT, 14f)
+        val mark = Btn(this, "+ MARCA", BtnStyle.LIGHT, sz(14f, 12f))
         mark.setOnClickListener { insertMark() }
-        head.addView(mark, lp(dp(84), dp(40)).m(r = dp(6)))
-        val clear = Btn(this, "BORRAR", BtnStyle.OUTLINE, 13f)
+        head.addView(mark, lp(dp(sz(84, 72)), dp(40)).m(r = dp(6)))
+        val clear = Btn(this, "BORRAR", BtnStyle.OUTLINE, sz(13f, 11f))
         clear.setOnClickListener {
             AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setMessage("¿Borrar todas las notas?")
@@ -720,12 +720,12 @@ class MainActivity : Activity() {
                 .setOnDismissListener { hideBars() }
                 .show()
         }
-        head.addView(clear, lp(dp(72), dp(40)).m(r = dp(6)))
+        head.addView(clear, lp(dp(sz(72, 62)), dp(40)).m(r = dp(6)))
         notesActions.add(mark)
         notesActions.add(clear)
         val close = Btn(this, "✕", BtnStyle.OUTLINE, 16f)
         close.setOnClickListener { toggleNotes() }
-        head.addView(close, lp(dp(42), dp(40)))
+        head.addView(close, lp(dp(sz(42, 36)), dp(40)))
         panel.addView(head)
 
         notesEdit = EditText(this)

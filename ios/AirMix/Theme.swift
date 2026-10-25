@@ -244,7 +244,7 @@ struct NameChip: View {
         Text(n.isEmpty ? fallback : n)
             .font(bf(height < 30 ? 12 : 14))
             .lineLimit(1)
-            .minimumScaleFactor(0.6)
+            .minimumScaleFactor(0.5)
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
             .foregroundColor(filled ? ([0, 1, 4, 5].contains(c) ? .white : C.ink) : (c == 8 ? C.text : base))
@@ -262,7 +262,7 @@ struct DbLabel: View {
         self.color = color
     }
     var body: some View {
-        Text(Fmt.faderDb(p.float ?? 0)).font(bf(13)).foregroundColor(color).lineLimit(1).minimumScaleFactor(0.6)
+        Text(Fmt.faderDb(p.float ?? 0)).font(bf(13)).foregroundColor(color).lineLimit(1).minimumScaleFactor(0.4).allowsTightening(true)
     }
 }
 

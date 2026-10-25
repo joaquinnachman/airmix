@@ -26,6 +26,7 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
 
     val name = label(s.title, sz(15f, 12f))
     name.setPadding(dp(4), 0, dp(4), 0)
+    name.fitOneLine(sz(8, 7))
     applyScribble(name, 0)
     name.setOnClickListener { onOpen(s) }
     name.bind(s.nameAddr) { v -> name.text = v.toString().ifEmpty { s.title } }
@@ -42,6 +43,7 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     info.setPadding(dp(sz(8, 4)), 0, dp(sz(8, 4)), 0)
     info.addView(toggle("S", s.soloAddr, BtnStyle.SMALL, color = C.SOLO, sp = sz(15f, 12f)), lp(dp(sz(38, 28)), dp(sz(32, 24))))
     val dbText = label("", sz(14f, 11f), if (sendAddr != null) C.SENDS else C.TEXT, Gravity.END or Gravity.CENTER_VERTICAL)
+    dbText.fitOneLine(7)
     info.addView(dbText, lp(0, dp(sz(32, 24)), 1f))
     col.addView(info, lp(MATCH, dp(sz(40, 28))))
 
@@ -81,6 +83,14 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     col.addView(mute, lp(MATCH, dp(sz(48, 34))).m(dp(sz(8, 4)), dp(sz(6, 3)), dp(sz(8, 4)), dp(sz(10, 5))))
     if (k) col.setPadding(0, 0, 0, 0)
     return col
+}
+
+/** Texto en una sola línea que se achica (hasta minSp) en vez de partirse cuando la tira es angosta. */
+fun android.widget.TextView.fitOneLine(minSp: Int) {
+    maxLines = 1
+    ellipsize = android.text.TextUtils.TruncateAt.END
+    val max = (textSize / resources.displayMetrics.scaledDensity).toInt().coerceAtLeast(minSp + 1)
+    setAutoSizeTextTypeUniformWithConfiguration(minSp, max, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
 }
 
 /**
