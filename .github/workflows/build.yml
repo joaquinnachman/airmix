@@ -37,7 +37,7 @@ jobs:
         continue-on-error: true
         run: |
           cd android
-          ./gradlew testDebugUnitTest --tests '*ScreensTest*' > test.log 2>&1 || (tail -n 80 test.log; grep -A12 "What went wrong" test.log | head -n 40 | while IFS= read -r l; do echo "::warning::$l"; done; grep -E "^e: |Exception" test.log | head -n 15 | while IFS= read -r l; do echo "::warning::$l"; done)
+          ./gradlew testDebugUnitTest --tests '*ScreensTest*' > test.log 2>&1 || (tail -n 80 test.log; grep -E "^e: |Exception|at ar\.joaquin" test.log | sed -E 's#file:///home/runner/work/[^/]+/[^/]+/##' | head -n 30 | while IFS= read -r l; do echo "::warning::$l"; done)
           mkdir -p ../screens && for f in app/build/screens/*.png; do cp "$f" "../screens/android-$(basename "$f")"; done; ls ../screens
       - uses: actions/upload-artifact@v4
         with:
