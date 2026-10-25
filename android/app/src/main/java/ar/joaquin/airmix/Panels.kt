@@ -111,6 +111,7 @@ class HoldMuteBtn(ctx: Context, private val addr: String, sp: Float) : Btn(ctx, 
 
     init {
         activeColor = C.MUTE
+        maxLines = 1
         bind(addr) { v -> active = v.asI() == 0 }
     }
 

@@ -33,7 +33,8 @@ struct FaderView: View {
                     let (db, lbl) = FaderView.marks[i]
                     let y = bottom - CGFloat(Fmt.dbToFader(db)) * travel
                     ctx.fill(Path(CGRect(x: lx + 3, y: y - 0.5, width: max(cx - tw / 2 - 3 - lx - 3, 0), height: 1)), with: .color(db == 0 ? C.text : C.tick))
-                    if drawnY.allSatisfy({ abs($0 - y) >= 12 }) {
+                    // Si la tira es muy angosta no hay lugar para los números: solo las rayitas.
+                    if lx >= 22 && drawnY.allSatisfy({ abs($0 - y) >= 12 }) {
                         ctx.draw(Text(lbl).font(bf(9)).foregroundColor(db == 0 ? C.text : C.tick), at: CGPoint(x: lx, y: y), anchor: .trailing)
                         drawnY.append(y)
                     }

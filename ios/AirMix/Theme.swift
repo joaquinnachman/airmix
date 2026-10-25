@@ -106,7 +106,7 @@ struct Pill: View {
                 .font(bf(size))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.5)
                 .foregroundColor(fg)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(RoundedRectangle(cornerRadius: style == .tab ? 8 : 10).fill(bg))
@@ -262,7 +262,7 @@ struct DbLabel: View {
         self.color = color
     }
     var body: some View {
-        Text(Fmt.faderDb(p.float ?? 0)).font(bf(13)).foregroundColor(color)
+        Text(Fmt.faderDb(p.float ?? 0)).font(bf(13)).foregroundColor(color).lineLimit(1).minimumScaleFactor(0.6)
     }
 }
 

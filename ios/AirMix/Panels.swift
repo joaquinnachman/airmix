@@ -89,7 +89,7 @@ struct HoldMuteButton: View {
                     RoundedRectangle(cornerRadius: 10).fill(C.mute.opacity(0.75)).frame(width: g.size.width * progress)
                 }
                 RoundedRectangle(cornerRadius: 10).stroke(C.line, lineWidth: 1)
-                Text(pressing ? "MANTENÉ…" : "MUTE").font(bf(size)).foregroundColor(C.text).frame(maxWidth: .infinity)
+                Text(pressing ? "MANTENÉ…" : "MUTE").font(bf(size)).foregroundColor(C.text).lineLimit(1).minimumScaleFactor(0.5).padding(.horizontal, 2).frame(maxWidth: .infinity)
             }
             .contentShape(Rectangle())
             .onLongPressGesture(minimumDuration: 2, maximumDistance: 40, perform: {
@@ -179,7 +179,7 @@ struct ConfigPanel: View {
                         HStack(spacing: 14) {
                             ParamToggle("LINK STEREO  \(odd)-\(odd + 1)", addr: chLinkAddr(odd), color: C.sends, size: 15).frame(width: 230, height: 46)
                             Text("Une los dos canales: fader, mute y EQ van juntos y en MEZCLA se ven como una sola tira.")
-                                .font(bf(12)).foregroundColor(C.dim).lineLimit(2)
+                                .font(bf(12)).foregroundColor(C.dim).lineLimit(2).frame(maxWidth: 320, alignment: .leading)
                         }
                         .padding(.top, 4)
                     }

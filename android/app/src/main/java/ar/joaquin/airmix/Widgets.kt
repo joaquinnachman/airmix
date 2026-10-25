@@ -72,7 +72,8 @@ class FaderView(ctx: Context) : View(ctx) {
             c.drawRect(lx + dpf(3f), y - dpf(0.5f), cx - tw / 2f - dpf(3f), y + dpf(0.5f), p)
             var free = true
             for (d in 0 until drawn) if (Math.abs(drawnY[d] - y) < minGap) { free = false; break }
-            if (free) {
+            // Si la tira es muy angosta no hay lugar para los números: solo las rayitas.
+            if (free && lx >= dpf(22f)) {
                 c.drawText(markLbl[i], lx, y + dpf(3.5f), p)
                 drawnY[drawn++] = y
             }
