@@ -19,7 +19,7 @@ import java.time.Duration
 
 /**
  * Capturas de pantalla para revisar celular y tablet en cada versión (regla de CLAUDE.md).
- * Se generan en CI con Robolectric y se suben al Release como screens-android/*.png.
+ * Se generan en CI con Robolectric y se suben al Release (android-celular-…, android-tablet-…).
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
