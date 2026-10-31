@@ -50,3 +50,49 @@ object ShowTimer {
         else String.format(Locale.US, "%02d:%02d", m, sec)
     }
 }
+
+/**
+ * TAP tempo: se toca al ritmo del tema (negras) y el tiempo pasa a TODOS los efectos cargados
+ * que tengan parámetro TIME en ms (Stereo Delay, 3/4-Tap, Delay/Reverb, Delay/Chorus, Delay/Flanger, Mod Delay).
+ */
+object TapTempo {
+    private val taps = LongArray(5)
+    private var count = 0
+    /** Último tempo aplicado (0 = ninguno). */
+    var bpm = 0
+
+    /** Slots de efectos que pueden tener delay (en X32 los FX 5-8 no tienen delays). */
+    fun slots(): Int = if (App.console.isX32) 4 else App.console.fxUnits
+
+    /** Registra un toque. Devuelve cuántos efectos se actualizaron (-1 = todavía falta otro toque). */
+    fun tap(now: Long): Int {
+        if (count > 0 && now - taps[(count - 1) % taps.size] > 2000L) count = 0
+        taps[count % taps.size] = now
+        count++
+        if (count < 2) return -1
+        val n = minOf(count, taps.size)
+        val first = taps[(count - n) % taps.size]
+        val last = taps[(count - 1) % taps.size]
+        val ms = (last - first).toFloat() / (n - 1)
+        if (ms < 100f) return -1
+        bpm = Math.round(60000f / ms)
+        return apply(ms)
+    }
+
+    fun apply(ms: Float): Int {
+        var applied = 0
+        for (n in 1..slots()) {
+            val raw = App.store.int("/fx/$n/type", -1)
+            if (raw < 0) continue
+            val abbr = Fx.abbr(n, raw) ?: continue
+            val pars = Fx.params(abbr)
+            val i = pars.indexOfFirst { it.label == "TIME" && it.unit == "ms" && it.kind == 'A' }
+            if (i < 0) continue
+            val p = pars[i]
+            val v = ((ms.coerceIn(p.a, p.b) - p.a) / (p.b - p.a)).coerceIn(0f, 1f)
+            App.store.set("/fx/$n/par/${Fmt.two(i + 1)}", v)
+            applied++
+        }
+        return applied
+    }
+}

@@ -71,9 +71,50 @@ class EqGraphView(
         set(v) {
             field = v
             if (v && isAttachedToWindow) App.meterViews.add(this) else App.meterViews.remove(this)
+            if (!v && fbBin >= 0) {
+                fbBin = -1
+                java.util.Arrays.fill(fbHits, 0)
+                onFeedback?.invoke(0f)
+            }
             invalidate()
         }
     private val rtaPath = Path()
+
+    /**
+     * Detector de acople: una banda del RTA que sobresale mucho de sus vecinas y se sostiene ~0,7 s.
+     * onFeedback recibe la frecuencia (Hz) o 0 cuando ya no hay.
+     */
+    var onFeedback: ((Float) -> Unit)? = null
+    private val fbHits = IntArray(MixerClient.RTA_BINS)
+    private var fbBin = -1
+    private var fbLabel = ""
+
+    private fun detectFeedback(m: FloatArray) {
+        val n = minOf(m.size, fbHits.size)
+        var best = -1
+        var bestLevel = -200f
+        for (i in 0 until n) {
+            if (i < 3 || i > n - 4) { fbHits[i] = 0; continue }
+            val around = (m[i - 3] + m[i - 2] + m[i + 2] + m[i + 3]) / 4f
+            val peak = m[i] > -45f && m[i] >= m[i - 1] && m[i] >= m[i + 1] && m[i] - around >= 12f
+            fbHits[i] = if (peak) minOf(fbHits[i] + 1, 90) else maxOf(fbHits[i] - 2, 0)
+            if (fbHits[i] >= 20 && m[i] > bestLevel) {
+                bestLevel = m[i]
+                best = i
+            }
+        }
+        if (best != fbBin) {
+            fbBin = best
+            val hz = if (best >= 0) binHz(best) else 0f
+            fbLabel = if (best >= 0) "ACOPLE " + shortHz(hz) else ""
+            onFeedback?.invoke(hz)
+        }
+    }
+
+    private fun binHz(i: Int): Float = (20.0 * Math.pow(1000.0, i / (MixerClient.RTA_BINS - 1.0))).toFloat()
+
+    private fun shortHz(hz: Float): String =
+        if (hz >= 1000f) String.format(java.util.Locale.US, "%.1fk", hz / 1000f) else String.format(java.util.Locale.US, "%.0f", hz)
 
     private val n = 160
     private val curve = FloatArray(n)
@@ -159,6 +200,18 @@ class EqGraphView(
         paint.alpha = 150
         c.drawPath(rtaPath, paint)
         paint.alpha = 255
+        detectFeedback(m)
+        if (fbBin >= 0) {
+            val x = gl + gw * fbBin / (n - 1)
+            paint.color = C.RED
+            paint.strokeWidth = dpf(2f)
+            c.drawLine(x, gt, x, gt + gh, paint)
+            paint.style = Paint.Style.FILL
+            paint.textSize = dpf(13f)
+            paint.typeface = FONT
+            paint.textAlign = if (x > gl + gw * 0.8f) Paint.Align.RIGHT else Paint.Align.LEFT
+            c.drawText(fbLabel, x + if (paint.textAlign == Paint.Align.LEFT) dpf(5f) else -dpf(5f), gt + dpf(16f), paint)
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {

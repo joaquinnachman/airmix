@@ -31,6 +31,7 @@ class MainActivity : Activity() {
         private const val REQ_SAVE = 41
         private const val REQ_OPEN = 42
         private const val REQ_SETLIST = 43
+        private const val REQ_RECOVER = 44
     }
 
     private var tab = Tab.MIX
@@ -64,6 +65,14 @@ class MainActivity : Activity() {
             if (ticking) handler.postDelayed(this, 33)
         }
     }
+
+    /** Hubo conexión en esta sesión: recién ahí un corte merece la franja roja. */
+    private var everConnected = false
+    private lateinit var lostBanner: TextView
+    private lateinit var lockBtn: Btn
+    private lateinit var bigTimer: FrameLayout
+    private lateinit var bigTimerText: TextView
+    private var locked = false
 
     private var dialog: AlertDialog? = null
     private var dialogList: LinearLayout? = null
@@ -118,6 +127,11 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
+        if (locked) return
+        if (::bigTimer.isInitialized && bigTimer.visibility == View.VISIBLE) {
+            bigTimer.visibility = View.GONE
+            return
+        }
         if (detail != null) {
             detail = null
             render()
@@ -169,10 +183,16 @@ class MainActivity : Activity() {
                 App.store.requeryObserved()
             } else {
                 java.util.Arrays.fill(c.meters, -100f)
+                Clip.reset()
                 for (v in App.meterViews) v.invalidate()
             }
+            showLostBanner(!isConn && everConnected)
+            if (isConn) everConnected = true
         }
-        if (connected) for (v in App.meterViews) v.invalidate()
+        if (connected) {
+            Clip.scan(c.meters, android.os.SystemClock.uptimeMillis())
+            for (v in App.meterViews) v.invalidate()
+        }
         // Links estéreo: si cambian (desde la app, la consola u otra app), se rearman las capas.
         if (++linkTick >= 15) {
             linkTick = 0
@@ -198,6 +218,7 @@ class MainActivity : Activity() {
         if (t == lastTimerText) return
         lastTimerText = t
         timerLabel.text = t
+        if (::bigTimerText.isInitialized) bigTimerText.text = t
         timerLabel.setTextColor(
             when {
                 ShowTimer.isRunning() -> C.GREEN
@@ -214,6 +235,32 @@ class MainActivity : Activity() {
             val a = chLinkAddr(p)
             if (watchedLinks.add(a)) App.store.observe(a) {}
         }
+        // Tipos de efecto cargados (para TAP tempo).
+        for (n in 1..TapTempo.slots()) {
+            val a = "/fx/$n/type"
+            if (watchedLinks.add(a)) App.store.observe(a) {}
+        }
+    }
+
+    /** Botón TAP de la pantalla principal: se mide en el momento del toque (ACTION_DOWN), no al soltar. */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun tapButton(): Btn {
+        val b = Btn(this, if (TapTempo.bpm > 0) "TAP ${TapTempo.bpm}" else "TAP", BtnStyle.OUTLINE, sz(15f, 12f))
+        b.activeColor = C.ACCENT
+        b.maxLines = 1
+        b.setOnTouchListener { v, e ->
+            if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                val n = TapTempo.tap(android.os.SystemClock.uptimeMillis())
+                b.active = true
+                v.postDelayed({ b.active = false }, 90)
+                if (n >= 0) {
+                    b.text = "TAP ${TapTempo.bpm}"
+                    if (n == 0) Toast.makeText(this, "No hay delays cargados en los efectos", Toast.LENGTH_SHORT).show()
+                }
+            }
+            true
+        }
+        return b
     }
 
     private fun onXinfo(name: String, model: String, fw: String) {
@@ -279,6 +326,16 @@ class MainActivity : Activity() {
         soloChip.setOnClickListener { clearSolos() }
         soloChip.bind("/-stat/solo") { v -> soloChip.visibility = if (v.asI() != 0) View.VISIBLE else View.GONE }
         top.addView(soloChip, lp(dp(sz(96, 74)), dp(sz(40, 32))).m(r = dp(sz(8, 4))))
+        lockBtn = Btn(this, "🔓", BtnStyle.OUTLINE, sz(18f, 15f))
+        lockBtn.activeColor = C.ACCENT
+        lockBtn.setOnClickListener {
+            Toast.makeText(this, if (locked) "Mantené apretado para desbloquear" else "Mantené apretado para bloquear la pantalla", Toast.LENGTH_SHORT).show()
+        }
+        lockBtn.setOnLongClickListener {
+            setLocked(!locked)
+            true
+        }
+        top.addView(lockBtn, lp(dp(sz(52, 42)), dp(sz(40, 34))).m(r = dp(sz(8, 4))))
         conn = Btn(this, "", BtnStyle.OUTLINE, sz(14f, 12f))
         conn.maxLines = 1
         conn.ellipsize = android.text.TextUtils.TruncateAt.END
@@ -307,12 +364,143 @@ class MainActivity : Activity() {
             body.addView(notesPanel, lp(dp(420), MATCH))
         }
         root.addView(body, lp(MATCH, 0, 1f))
-        return root
+
+        // Capa de arriba: franja de corte, reloj gigante y candado (que bloquea todo menos a sí mismo).
+        val frame = LockFrame(this)
+        frame.addView(root, FrameLayout.LayoutParams(MATCH, MATCH))
+        bigTimer = buildBigTimer()
+        bigTimer.visibility = View.GONE
+        frame.addView(bigTimer, FrameLayout.LayoutParams(MATCH, MATCH))
+        lostBanner = label("⚠  SE CORTÓ LA CONEXIÓN CON LA CONSOLA  ·  reconectando…", sz(20f, 15f), Color.WHITE)
+        lostBanner.setBackgroundColor(C.RED)
+        lostBanner.maxLines = 1
+        lostBanner.visibility = View.GONE
+        lostBanner.elevation = dp(16).toFloat()
+        frame.addView(lostBanner, FrameLayout.LayoutParams(MATCH, dp(sz(56, 42)), Gravity.TOP).also { it.topMargin = dp(sz(60, 46)) })
+        return frame
+    }
+
+    /** Raíz que, con el candado puesto, se come todos los toques salvo los del candado. */
+    private inner class LockFrame(ctx: Context) : FrameLayout(ctx) {
+        private val r = android.graphics.Rect()
+        private val loc = IntArray(2)
+
+        private fun onLock(e: android.view.MotionEvent): Boolean {
+            lockBtn.getLocationOnScreen(loc)
+            r.set(loc[0], loc[1], loc[0] + lockBtn.width, loc[1] + lockBtn.height)
+            return r.contains(e.rawX.toInt(), e.rawY.toInt())
+        }
+
+        override fun onInterceptTouchEvent(e: android.view.MotionEvent): Boolean = locked && !onLock(e)
+
+        @android.annotation.SuppressLint("ClickableViewAccessibility")
+        override fun onTouchEvent(e: android.view.MotionEvent): Boolean = locked
+    }
+
+    private fun showLostBanner(show: Boolean) {
+        if (!::lostBanner.isInitialized) return
+        val was = lostBanner.visibility == View.VISIBLE
+        lostBanner.visibility = if (show) View.VISIBLE else View.GONE
+        if (show && !was) vibrate(longArrayOf(0, 400, 200, 400))
+    }
+
+    private fun vibrate(pattern: LongArray) {
+        try {
+            val v = if (android.os.Build.VERSION.SDK_INT >= 31) {
+                (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager).defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+            }
+            v.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1))
+        } catch (_: Exception) {}
+    }
+
+    /** Solo para las capturas automáticas de CI (ScreensTest). */
+    internal fun debugScreen(name: String) {
+        when (name) {
+            "favoritos" -> {
+                prefs().edit().putString("favs", "CH:1;CH:2;CH:7;CH:8;BUS:1").apply()
+                rebuildRail()
+                tab = Tab.MIX
+                detail = null
+                layerIdx = layers.size - 1
+                render()
+            }
+            "linecheck" -> {
+                val now = android.os.SystemClock.uptimeMillis() + 60_000L
+                for (i in listOf(0, 1, 2, 6, 7)) Clip.signalAt[i] = now
+                Clip.at[2] = now
+                tab = Tab.METERS
+                lineCheck = true
+                render()
+            }
+            "reloj" -> {
+                bigTimer.visibility = View.VISIBLE
+                bigTimerText.text = "1:23:45"
+            }
+            "corte" -> {
+                bigTimer.visibility = View.GONE
+                tab = Tab.MIX
+                layerIdx = 0
+                render()
+                lostBanner.visibility = View.VISIBLE
+                locked = true
+                lockBtn.active = true
+                lockBtn.text = "🔒"
+            }
+        }
+    }
+
+    /** CANDADO: mantener apretado para bloquear / desbloquear. La pantalla sigue prendida y mostrando todo. */
+    private fun setLocked(on: Boolean) {
+        locked = on
+        lockBtn.active = on
+        lockBtn.text = if (on) "🔒" else "🔓"
+        vibrate(longArrayOf(0, 60))
+        Toast.makeText(this, if (on) "Pantalla bloqueada. Mantené el candado para desbloquear." else "Pantalla desbloqueada", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Reloj del show en pantalla completa: solo el tiempo, gigante. Toque = cerrar; mantener = poner en cero. */
+    private fun buildBigTimer(): FrameLayout {
+        val f = FrameLayout(this)
+        f.setBackgroundColor(Color.BLACK)
+        f.isClickable = true
+        f.elevation = dp(20).toFloat()
+        bigTimerText = TextView(this)
+        bigTimerText.typeface = FONT
+        bigTimerText.setTextColor(Color.WHITE)
+        bigTimerText.gravity = Gravity.CENTER
+        bigTimerText.maxLines = 1
+        bigTimerText.includeFontPadding = false
+        bigTimerText.fontFeatureSettings = "tnum" // números de ancho fijo: el reloj no "baila"
+        bigTimerText.setAutoSizeTextTypeUniformWithConfiguration(40, 600, 2, android.util.TypedValue.COMPLEX_UNIT_SP)
+        bigTimerText.text = ShowTimer.format(ShowTimer.elapsed())
+        f.addView(bigTimerText, FrameLayout.LayoutParams(MATCH, MATCH).also { it.setMargins(dp(24), dp(24), dp(24), dp(24)) })
+        f.setOnClickListener { f.visibility = View.GONE }
+        f.setOnLongClickListener {
+            confirmTimerReset()
+            true
+        }
+        return f
+    }
+
+    private fun confirmTimerReset() {
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setMessage("¿Poner el cronómetro en cero?")
+            .setPositiveButton("Reset") { _, _ ->
+                ShowTimer.reset(prefs())
+                lastTimerText = ""
+                updateTimer()
+            }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
     }
 
     /** Riel izquierdo: capas (con scroll si son muchas, ej. X32) + MUTE FX + CLR SOLO siempre a mano. */
     private fun rebuildRail() {
-        layers = buildLayers()
+        layers = buildLayers() + Layer("★ FAVORITOS", favStrips(prefs().getString("favs", "") ?: ""), fav = true)
         if (layerIdx >= layers.size) layerIdx = 0
         rail.removeAllViews()
         layerBtns.clear()
@@ -331,17 +519,11 @@ class MainActivity : Activity() {
             lastTimerText = ""
             updateTimer()
         }
+        // Mantener apretado: reloj gigante para mostrarle al dúo (el reset quedó adentro, manteniendo apretado).
         timerBox.setOnLongClickListener {
-            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setMessage("¿Poner el cronómetro en cero?")
-                .setPositiveButton("Reset") { _, _ ->
-                    ShowTimer.reset(prefs())
-                    lastTimerText = ""
-                    updateTimer()
-                }
-                .setNegativeButton("Cancelar", null)
-                .setOnDismissListener { hideBars() }
-                .show()
+            lastTimerText = ""
+            bigTimer.visibility = View.VISIBLE
+            updateTimer()
             true
         }
         rail.addView(timerBox, lp(MATCH, dp(sz(76, 58))).m(dp(sz(10, 6)), dp(sz(10, 6)), dp(sz(10, 6)), dp(2)))
@@ -350,8 +532,8 @@ class MainActivity : Activity() {
         list.setPadding(dp(sz(10, 6)), dp(sz(8, 4)), dp(sz(10, 6)), dp(sz(8, 4)))
         layers.forEachIndexed { i, l ->
             val b = Btn(this, l.label, BtnStyle.NAV, sz(15f, 12f))
-            b.activeColor = Sector.of(l.kind)
-            b.idleText = Sector.of(l.kind)
+            b.activeColor = if (l.fav) C.YELLOW else Sector.of(l.kind)
+            b.idleText = if (l.fav) C.YELLOW else Sector.of(l.kind)
             b.refresh()
             b.setOnClickListener {
                 layerIdx = i
@@ -410,18 +592,34 @@ class MainActivity : Activity() {
         content.addView(v, FrameLayout.LayoutParams(MATCH, MATCH))
     }
 
-    /** MEDIDORES + CLR SOLO arriba a la derecha. */
+    /** LINE CHECK: fichas verdes/grises por entrada en vez de las barras. */
+    private var lineCheck = false
+
+    /** MEDIDORES + LINE CHECK arriba a la izquierda + CLR SOLO arriba a la derecha. */
     private fun buildMeters(): View {
         val root = col()
         root.setBackgroundColor(C.BG)
         val bar = row()
         bar.setPadding(dp(16), dp(6), dp(16), 0)
-        bar.addView(View(this), lp(0, 1, 1f))
+        val lc = Btn(this, "LINE CHECK", BtnStyle.OUTLINE, sz(14f, 12f))
+        lc.activeColor = C.GREEN
+        lc.active = lineCheck
+        lc.setOnClickListener {
+            lineCheck = !lineCheck
+            render()
+        }
+        bar.addView(lc, lp(dp(sz(140, 116)), dp(sz(40, 32))))
+        if (lineCheck) {
+            bar.addView(
+                label("Verde = llega señal · gris = no llega nada · borde rojo = clip", sz(14f, 11f), C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL).also { it.maxLines = 1 },
+                lp(0, dp(sz(40, 32)), 1f).m(l = dp(14))
+            )
+        } else bar.addView(View(this), lp(0, 1, 1f))
         val clr = Btn(this, "CLR SOLO", BtnStyle.OUTLINE, sz(14f, 12f))
         clr.setOnClickListener { clearSolos() }
         bar.addView(clr, lp(dp(sz(120, 100)), dp(sz(40, 32))))
         root.addView(bar, lp(MATCH, WRAP))
-        root.addView(AllMetersView(this), lp(MATCH, 0, 1f))
+        root.addView(if (lineCheck) LineCheckView(this) else AllMetersView(this), lp(MATCH, 0, 1f))
         return root
     }
 
@@ -467,12 +665,18 @@ class MainActivity : Activity() {
             header.addView(exit, lp(dp(sz(110, 84)), dp(sz(40, 32))))
         } else {
             header.setBackgroundColor(C.PANEL)
-            val sc = Sector.of(layer?.kind ?: Kind.CH)
+            val sc = if (layer?.fav == true) C.YELLOW else Sector.of(layer?.kind ?: Kind.CH)
             header.addView(View(this).also { it.background = rounded(sc, 3) }, lp(dp(6), dp(28)).m(r = dp(12)))
             header.addView(
                 label(layer?.label ?: "", sz(20f, 15f), sc, Gravity.START or Gravity.CENTER_VERTICAL),
                 lp(0, MATCH, 1f)
             )
+            if (layer?.fav == true) {
+                val edit = Btn(this, "ELEGIR TIRAS", BtnStyle.OUTLINE, sz(15f, 12f))
+                edit.setOnClickListener { editFavorites() }
+                header.addView(edit, lp(dp(sz(150, 116)), dp(sz(40, 32))).m(r = dp(8)))
+            }
+            header.addView(tapButton(), lp(dp(sz(110, 84)), dp(sz(40, 32))).m(r = dp(8)))
             val sel = Btn(this, "SENDS ON FADER ▾", BtnStyle.OUTLINE, sz(15f, 12f))
             sel.setOnClickListener { showSendsPopup(sel) }
             header.addView(sel, lp(dp(sz(190, 140)), dp(sz(40, 32))))
@@ -484,7 +688,19 @@ class MainActivity : Activity() {
         strips.setPadding(dp(4), dp(4), dp(4), dp(4))
         val list = layer?.strips ?: emptyList()
         // Capas de canales: tantas tiras como haya (un par linkeado ocupa un lugar). El resto: 8 lugares fijos.
-        val slots = if (layer?.kind == Kind.CH) list.size else 8
+        if (layer?.fav == true && list.isEmpty()) {
+            val empty = col()
+            empty.gravity = Gravity.CENTER
+            empty.addView(label("Todavía no elegiste favoritos.", sz(20f, 15f), C.TEXT), lp(MATCH, dp(40)))
+            empty.addView(label("Armá tu propia capa con las tiras que más usás (hasta $MAX_FAVS): por ejemplo las voces, las pistas y un bus.", sz(15f, 12f), C.TEXT_DIM).also { it.maxLines = 2 }, lp(MATCH, WRAP).m(t = dp(6)))
+            val pick = Btn(this, "ELEGIR TIRAS", BtnStyle.LIGHT, 17f)
+            pick.activeColor = C.YELLOW
+            pick.active = true
+            pick.setOnClickListener { editFavorites() }
+            empty.addView(pick, lp(dp(220), dp(52)).m(t = dp(16)))
+            strips.addView(empty, lp(0, MATCH, 8f))
+        }
+        val slots = if (layer?.kind == Kind.CH || layer?.fav == true) list.size else 8
         for (i in 0 until slots) {
             val v = if (i < list.size) stripView(list[i], sends) { openDetail(it) } else View(this)
             strips.addView(v, lp(0, MATCH, 1f).m(dp(2), 0, dp(2), 0))
@@ -497,6 +713,39 @@ class MainActivity : Activity() {
         strips.addView(stripView(master, SendTarget.MAIN) { openDetail(it) }, lp(0, MATCH, 1f).m(dp(10), 0, dp(2), 0))
         root.addView(strips, lp(MATCH, 0, 1f))
         return root
+    }
+
+    /** Elegir las tiras de FAVORITOS (hasta MAX_FAVS), con su nombre actual. */
+    private fun editFavorites() {
+        val all = favCandidates()
+        val saved = (prefs().getString("favs", "") ?: "").split(';').filter { it.isNotEmpty() }.toMutableList()
+        val labels = all.map { s ->
+            val n = (App.store.get(s.nameAddr) as? String).orEmpty()
+            if (n.isEmpty()) s.title else "${s.title}  ·  $n"
+        }.toTypedArray()
+        val checked = BooleanArray(all.size) { all[it].favKey() in saved }
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Favoritos (hasta $MAX_FAVS)")
+            .setMultiChoiceItems(labels, checked) { d, which, on ->
+                if (on && checked.count { it } > MAX_FAVS) {
+                    checked[which] = false
+                    (d as AlertDialog).listView.setItemChecked(which, false)
+                    Toast.makeText(this, "Máximo $MAX_FAVS tiras", Toast.LENGTH_SHORT).show()
+                } else checked[which] = on
+            }
+            .setPositiveButton("Listo") { _, _ ->
+                // Mantiene el orden en que estaban; las nuevas van al final.
+                val keys = all.indices.filter { checked[it] }.map { all[it].favKey() }
+                val ordered = saved.filter { it in keys } + keys.filter { it !in saved }
+                prefs().edit().putString("favs", ordered.joinToString(";")).apply()
+                rebuildRail()
+                render()
+            }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
+        // Pide los nombres que falten, para la próxima vez que se abra.
+        for (s in all) if (App.store.get(s.nameAddr) == null) App.client?.query(s.nameAddr)
     }
 
     private fun showSendsPopup(anchor: View) {
@@ -1050,6 +1299,16 @@ class MainActivity : Activity() {
         val files = scenesDir().listFiles()?.filter { it.name.endsWith(".scn") }?.sortedByDescending { it.lastModified() } ?: emptyList()
         if (files.isEmpty()) {
             list.addView(label("Todavía no hay escenas guardadas.", 15f, C.TEXT_DIM, Gravity.START), lp(MATCH, dp(40)))
+            // Si se reinstaló la app, las copias siguen en Descargas/AirMix: se recuperan de una.
+            val rec = Btn(this, "RECUPERAR ESCENAS DE DESCARGAS/AIRMIX", BtnStyle.LIGHT, 14f)
+            rec.activeColor = C.SENDS
+            rec.active = true
+            rec.setOnClickListener { recoverScenes() }
+            list.addView(rec, lp(MATCH, dp(50)).m(t = dp(8)))
+            list.addView(
+                label("Abre Descargas/AirMix: seleccioná todas las escenas (mantené apretada una y tocá las demás) y quedan otra vez en la app.", 13f, C.TEXT_DIM, Gravity.START).also { it.maxLines = 3 },
+                lp(MATCH, WRAP).m(t = dp(6))
+            )
         }
         val df = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.US)
         for (file in files) {
@@ -1177,9 +1436,12 @@ class MainActivity : Activity() {
 
     private fun confirmLoad(scene: Scenes.Scene) {
         if (Scenes.busy()) return
+        val ph = Scenes.phantomOn(scene)
+        val warn = if (ph.isEmpty()) "\n\n48V: apagado en todas las entradas."
+        else "\n\n⚠ ESTA ESCENA PRENDE 48V EN: entrada ${ph.joinToString(", ")}. El resto queda apagado."
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle("Cargar \"${scene.name}\"")
-            .setMessage("Esto reemplaza la mezcla actual de la consola (${scene.lines.size} bloques).\n\nAntes de cargar se verifica el formato con la consola; lo que no se pueda verificar queda como está.")
+            .setMessage("Esto reemplaza la mezcla actual de la consola (${scene.lines.size} bloques). Los links stereo y el 48V quedan como dice la escena; lo que no trae, apagado.$warn\n\nAntes de cargar se verifica el formato con la consola; lo que no se pueda verificar queda como está.")
             .setPositiveButton("Cargar") { _, _ -> Scenes.load(scene) }
             .setNegativeButton("Cancelar", null)
             .setOnDismissListener { hideBars() }
@@ -1194,6 +1456,39 @@ class MainActivity : Activity() {
             .setType("application/octet-stream")
             .putExtra(Intent.EXTRA_TITLE, safeName(name) + ".scn")
         try { startActivityForResult(i, REQ_SAVE) } catch (_: Exception) {}
+    }
+
+    /** Selector del sistema abierto en Descargas/AirMix, con selección múltiple. */
+    @Suppress("DEPRECATION")
+    private fun recoverScenes() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("*/*")
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            i.putExtra(
+                android.provider.DocumentsContract.EXTRA_INITIAL_URI,
+                android.net.Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload%2FAirMix")
+            )
+        }
+        try { startActivityForResult(i, REQ_RECOVER) } catch (_: Exception) {}
+    }
+
+    /** Ya hay una copia con ese nombre en Descargas/AirMix (para no duplicarla). */
+    private fun inDownloads(name: String): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 29) {
+            @Suppress("DEPRECATION")
+            val dir = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "AirMix")
+            return java.io.File(dir, safeName(name) + ".scn").exists()
+        }
+        return try {
+            contentResolver.query(
+                android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(android.provider.MediaStore.MediaColumns._ID),
+                "${android.provider.MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
+                arrayOf(safeName(name) + ".scn", "%AirMix%"), null
+            )?.use { it.count > 0 } ?: false
+        } catch (_: Exception) { false }
     }
 
     @Suppress("DEPRECATION")
@@ -1221,7 +1516,21 @@ class MainActivity : Activity() {
         val uri = data?.data
         if (resultCode != RESULT_OK || uri == null) return
         try {
-            if (requestCode == REQ_SETLIST) {
+            if (requestCode == REQ_RECOVER) {
+                val uris = ArrayList<android.net.Uri>()
+                val clip = data.clipData
+                if (clip != null) for (k in 0 until clip.itemCount) uris.add(clip.getItemAt(k).uri) else uris.add(uri)
+                var n = 0
+                for (u in uris) {
+                    val text = contentResolver.openInputStream(u)?.use { it.readBytes().toString(Charsets.ISO_8859_1) } ?: continue
+                    val sc = Scenes.parse(text, displayName(u).removeSuffix(".scn"))
+                    if (sc.lines.isEmpty()) continue
+                    java.io.File(scenesDir(), safeName(displayName(u).removeSuffix(".scn").ifEmpty { sc.name }) + ".scn").writeText(text, Charsets.ISO_8859_1)
+                    n++
+                }
+                if (tab == Tab.SCENES) render()
+                Toast.makeText(this, if (n > 0) "$n escenas recuperadas" else "No se encontraron escenas .scn", Toast.LENGTH_LONG).show()
+            } else if (requestCode == REQ_SETLIST) {
                 val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
                 onSetlistFile(bytes, displayName(uri))
             } else if (requestCode == REQ_SAVE) {
@@ -1239,6 +1548,8 @@ class MainActivity : Activity() {
                     return
                 }
                 java.io.File(scenesDir(), safeName(scene.name) + ".scn").writeText(text, Charsets.ISO_8859_1)
+                // Copia de respaldo en Descargas/AirMix, que sobrevive aunque se desinstale la app.
+                if (!inDownloads(scene.name)) saveToDownloads(scene.name, text)
                 if (tab == Tab.SCENES) render()
                 confirmLoad(scene)
             }

@@ -500,6 +500,28 @@ object Panels {
             top.addView(b, lp(dp(92), dp(42)).m(r = dp(6)))
         }
         top.addView(View(ctx), lp(0, 1, 1f))
+        // Acople detectado en el RTA: se sugiere un corte angosto en esa frecuencia (se aplica solo si lo tocás).
+        val fb = Btn(ctx, "", BtnStyle.LIGHT, 14f)
+        fb.activeColor = C.RED
+        fb.active = true
+        fb.maxLines = 1
+        fb.visibility = View.GONE
+        var fbHz = 0f
+        graph.onFeedback = { hz ->
+            fbHz = hz
+            fb.visibility = if (hz > 0f) View.VISIBLE else View.GONE
+            if (hz > 0f) fb.text = "✂ CORTAR ${Fmt.hz(hz)}"
+        }
+        fb.setOnClickListener {
+            if (fbHz <= 0f) return@setOnClickListener
+            val band = cutFeedback(p, bands, fbHz)
+            if (band < 0) Toast.makeText(ctx, "No hay una banda libre para el corte: liberá una (ganancia en 0 dB).", Toast.LENGTH_LONG).show()
+            else {
+                select(band)
+                Toast.makeText(ctx, "Corte en ${Fmt.hz(fbHz)} (banda ${names[band - 1]}). Si sigue, tocá de nuevo para cortar más.", Toast.LENGTH_SHORT).show()
+            }
+        }
+        top.addView(fb, lp(dp(190), dp(42)).m(r = dp(6)))
         val rta = Btn(ctx, "RTA", BtnStyle.OUTLINE, 15f)
         rta.activeColor = C.SENDS
         rta.active = rtaOn
@@ -540,6 +562,46 @@ object Panels {
 
     /** RTA prendido/apagado (se recuerda mientras la app está abierta). */
     var rtaOn = true
+
+    /**
+     * Corte de acople: si ya hay una banda PEQ cortando cerca (±1/6 de octava), la baja 3 dB más;
+     * si no, usa la banda libre (PEQ/VEQ en 0 dB) más cercana: PEQ, -6 dB, Q 8 (angosto).
+     * Devuelve la banda usada o -1 si no hay ninguna libre.
+     */
+    private fun cutFeedback(p: String, bands: Int, hz: Float): Int {
+        val st = App.store
+        val target = Fmt.logInv(20f, 20000f, hz).coerceIn(0f, 1f)
+        val near = 1f / 18f // 1/6 de octava en la escala de 10 octavas
+        for (b in 1..bands) {
+            val type = st.int("$p/eq/$b/type", 2)
+            val g = Fmt.lin(-15f, 15f, st.float("$p/eq/$b/g", 0.5f))
+            if (type == 2 && g < -0.5f && Math.abs(st.float("$p/eq/$b/f", 0.5f) - target) < near) {
+                st.set("$p/eq/$b/g", ((g - 3f).coerceAtLeast(-15f) + 15f) / 30f)
+                if (st.int("$p/eq/on", 1) == 0) st.set("$p/eq/on", 1)
+                return b
+            }
+        }
+        var best = -1
+        var dist = 2f
+        for (b in 1..bands) {
+            val type = st.int("$p/eq/$b/type", 2)
+            val g = Fmt.lin(-15f, 15f, st.float("$p/eq/$b/g", 0.5f))
+            val free = (type == 2 || type == 3) && Math.abs(g) < 0.5f
+            if (!free) continue
+            val d = Math.abs(st.float("$p/eq/$b/f", 0.5f) - target)
+            if (d < dist) {
+                dist = d
+                best = b
+            }
+        }
+        if (best < 0) return -1
+        st.set("$p/eq/$best/type", 2)
+        st.set("$p/eq/$best/f", target)
+        st.set("$p/eq/$best/g", (-6f + 15f) / 30f)
+        st.set("$p/eq/$best/q", Fmt.logInv(10f, 0.3f, 8f))
+        if (st.int("$p/eq/on", 1) == 0) st.set("$p/eq/on", 1)
+        return best
+    }
 
     // ------------------------------------------------------------------ ENVÍOS
 

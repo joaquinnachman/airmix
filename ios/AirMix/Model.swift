@@ -217,7 +217,74 @@ struct Layer: Identifiable {
     let id: Int
     let label: String
     let strips: [Strip]
+    var fav = false
     var kind: Kind { strips.first?.kind ?? .ch }
+}
+
+// MARK: favoritos (igual que en Model.kt)
+
+let maxFavs = 8
+let favKinds: [Kind] = [.ch, .aux, .rtn, .bus, .mtx, .fxsend, .dca]
+
+extension Strip {
+    /// "CH:1", igual que en Android.
+    var favKey: String { "\(String(describing: kind).uppercased()):\(idx)" }
+}
+
+/// Favoritos guardados -> tiras. Un canal de un par linkeado se muestra como el par (una sola vez).
+func favStrips(_ saved: String) -> [Strip] {
+    let links = Core.shared.links
+    var out: [Strip] = []
+    for tok in saved.split(separator: ";") {
+        let parts = tok.split(separator: ":")
+        guard parts.count == 2, let idx = Int(parts[1]),
+              let kind = favKinds.first(where: { String(describing: $0).uppercased() == parts[0] }),
+              stripsOfKind(kind).contains(where: { $0.idx == idx }) else { continue }
+        var st = Strip(kind: kind, idx: idx)
+        if kind == .ch {
+            if idx % 2 == 1 && links.contains(idx) { st = Strip(kind: .ch, idx: idx, pair: true) }
+            else if idx % 2 == 0 && links.contains(idx - 1) { st = Strip(kind: .ch, idx: idx - 1, pair: true) }
+        }
+        if !out.contains(st) { out.append(st) }
+    }
+    return out
+}
+
+func favCandidates() -> [Strip] { favKinds.flatMap { stripsOfKind($0) } }
+
+/// TAP tempo (igual que en Android): el tiempo va a todos los efectos cargados con parámetro TIME en ms.
+enum TapTempo {
+    private static var taps: [Double] = []
+    static var bpm = 0
+
+    static func slots() -> Int { Core.shared.console.isX32 ? 4 : Core.shared.console.fxUnits }
+
+    /// Registra un toque. Devuelve cuántos efectos se actualizaron (-1 = falta otro toque).
+    static func tap(_ now: Double) -> Int {
+        if let last = taps.last, now - last > 2 { taps.removeAll() }
+        taps.append(now)
+        if taps.count > 5 { taps.removeFirst() }
+        guard taps.count >= 2 else { return -1 }
+        let ms = Float((taps.last! - taps.first!) * 1000 / Double(taps.count - 1))
+        guard ms >= 100 else { return -1 }
+        bpm = Int((60000 / ms).rounded())
+        return apply(ms)
+    }
+
+    static func apply(_ ms: Float) -> Int {
+        var applied = 0
+        for n in 1...max(1, slots()) {
+            let raw = Store.shared.int("/fx/\(n)/type", def: -1)
+            guard raw >= 0, let abbr = Fx.abbrOf(n, raw) else { continue }
+            let pars = Fx.params(abbr)
+            guard let i = pars.firstIndex(where: { $0.label == "TIME" && $0.unit == "ms" && $0.kind == "A" }) else { continue }
+            let p = pars[i]
+            let v = min(max((min(max(ms, p.a), p.b) - p.a) / (p.b - p.a), 0), 1)
+            Store.shared.set("/fx/\(n)/par/\(Fmt.two(i + 1))", .f(v))
+            applied += 1
+        }
+        return applied
+    }
 }
 
 /// Link estéreo de canales: dirección del par que empieza en el impar n (igual que chLinkAddr en Android).

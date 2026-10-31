@@ -214,8 +214,33 @@ struct PanView: View {
     }
 }
 
+/// Aviso de clip (igual que Clip en Android): si un medidor llega a 0 dBFS queda marcado en rojo 3 s.
+/// Lo actualiza Core.tick; los medidores solo lo consultan. signalAt sirve para LINE CHECK.
+enum Clip {
+    static let hold: Double = 3
+    static let threshold: Float = -0.5
+    static let signalDb: Float = -50
+    static var at = [Double](repeating: 0, count: MixerClient.meterCount)
+    static var signalAt = [Double](repeating: 0, count: MixerClient.meterCount)
+
+    static func scan(_ m: UnsafeMutablePointer<Float>, now: Double) {
+        for i in 0..<MixerClient.meterCount {
+            if m[i] >= threshold { at[i] = now }
+            if m[i] >= signalDb { signalAt[i] = now }
+        }
+    }
+
+    static func on(_ i: Int, _ now: Double) -> Bool { i >= 0 && i < at.count && at[i] > 0 && now - at[i] < hold }
+    static func signal(_ i: Int, _ now: Double) -> Bool { i >= 0 && i < signalAt.count && signalAt[i] > 0 && now - signalAt[i] < 1.5 }
+
+    static func reset() {
+        for i in 0..<at.count { at[i] = 0; signalAt[i] = 0 }
+    }
+}
+
 enum MeterDraw {
-    static func bar(_ ctx: GraphicsContext, _ r: CGRect, _ db: Float) {
+    static func bar(_ ctx: GraphicsContext, _ r: CGRect, _ db: Float, clip: Bool = false) {
+        if clip { ctx.fill(Path(CGRect(x: r.minX, y: r.minY, width: r.width, height: max(r.height * 0.07, 4))), with: .color(C.red)) }
         if db <= -60 { return }
         let h = r.height
         let yv = r.maxY - CGFloat(min(max((db + 60) / 60, 0), 1)) * h
@@ -237,12 +262,13 @@ struct MeterView: View {
                 ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(C.meterBg))
                 let m = Core.shared.client.meters
                 guard l >= 0 && l < MixerClient.meterCount else { return }
+                let now = Date().timeIntervalSince1970
                 if r < 0 || r >= MixerClient.meterCount {
-                    MeterDraw.bar(ctx, CGRect(origin: .zero, size: size), m[l])
+                    MeterDraw.bar(ctx, CGRect(origin: .zero, size: size), m[l], clip: Clip.on(l, now))
                 } else {
                     let half = size.width / 2
-                    MeterDraw.bar(ctx, CGRect(x: 0, y: 0, width: half - 1, height: size.height), m[l])
-                    MeterDraw.bar(ctx, CGRect(x: half + 1, y: 0, width: half - 1, height: size.height), m[r])
+                    MeterDraw.bar(ctx, CGRect(x: 0, y: 0, width: half - 1, height: size.height), m[l], clip: Clip.on(l, now))
+                    MeterDraw.bar(ctx, CGRect(x: half + 1, y: 0, width: half - 1, height: size.height), m[r], clip: Clip.on(r, now))
                 }
             }
         }
@@ -262,16 +288,92 @@ struct AllMetersView: View {
                 let slot = (size.width - 2 * pad) / CGFloat(n)
                 let bw = slot * 0.6
                 let bottom = size.height - pad - labelH
+                let now = Date().timeIntervalSince1970
                 for i in 0..<n {
                     let x = pad + slot * CGFloat(i) + (slot - bw) / 2
                     let rect = CGRect(x: x, y: pad, width: bw, height: bottom - pad)
                     ctx.fill(Path(rect), with: .color(C.meterBg))
-                    MeterDraw.bar(ctx, rect, m[i])
+                    MeterDraw.bar(ctx, rect, m[i], clip: Clip.on(i, now))
                     ctx.draw(Text(labels[i]).font(bf(n > 50 ? 8 : 10)).foregroundColor(C.dim), at: CGPoint(x: x + bw / 2, y: bottom + 14))
                 }
             }
         }
         .background(C.bg)
+    }
+}
+
+/// LINE CHECK (MEDIDORES): una ficha por entrada, verde si llega señal, gris si no, borde rojo si clipeó.
+struct LineCheckView: View {
+    let strips: [Strip] = stripsOfKind(.ch) + stripsOfKind(.aux)
+    @StateObject private var names: ParamGroup
+
+    init() {
+        _names = StateObject(wrappedValue: ParamGroup((stripsOfKind(.ch) + stripsOfKind(.aux)).map { $0.nameAddr }))
+    }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 10.0)) { _ in
+            Canvas { ctx, size in
+                let n = strips.count
+                guard n > 0 else { return }
+                let cols = n <= 16 ? (n + 1) / 2 : 8
+                let rows = (n + cols - 1) / cols
+                let pad: CGFloat = 12, gap: CGFloat = 8
+                let cw = (size.width - 2 * pad - gap * CGFloat(cols - 1)) / CGFloat(cols)
+                let ch = min((size.height - 2 * pad - gap * CGFloat(rows - 1)) / CGFloat(rows), cw * 1.1)
+                let now = Date().timeIntervalSince1970
+                for (i, s) in strips.enumerated() {
+                    let x = pad + CGFloat(i % cols) * (cw + gap)
+                    let y = pad + CGFloat(i / cols) * (ch + gap)
+                    let rect = CGRect(x: x, y: y, width: cw, height: ch)
+                    let sig = Clip.signal(s.meterL, now) || (s.meterR >= 0 && Clip.signal(s.meterR, now))
+                    let shape = Path(roundedRect: rect, cornerRadius: 12)
+                    ctx.fill(shape, with: .color(sig ? C.green : C.surface2))
+                    if Clip.on(s.meterL, now) || (s.meterR >= 0 && Clip.on(s.meterR, now)) {
+                        ctx.stroke(shape, with: .color(C.red), lineWidth: 4)
+                    }
+                    let name = i < names.params.count ? (names.params[i].value?.stringValue ?? "") : ""
+                    ctx.draw(Text(s.title).font(bf(min(ch * 0.2, 22))).foregroundColor(sig ? C.ink : C.dim), at: CGPoint(x: x + cw / 2, y: y + ch * 0.36))
+                    if !name.isEmpty {
+                        ctx.draw(Text(name).font(bf(min(ch * 0.16, 16))).foregroundColor(sig ? C.ink : C.text), at: CGPoint(x: x + cw / 2, y: y + ch * 0.62))
+                    }
+                    ctx.draw(Text(sig ? "SEÑAL" : "SIN SEÑAL").font(bf(min(ch * 0.11, 11))).foregroundColor(sig ? C.ink : C.tick), at: CGPoint(x: x + cw / 2, y: y + ch * 0.85))
+                }
+            }
+        }
+        .background(C.bg)
+    }
+}
+
+/// Detector de acople sobre el RTA (igual que en EqGraphView de Android): una banda que sobresale
+/// 12 dB de sus vecinas y se sostiene ~0,7 s. hz = 0 cuando no hay.
+final class FeedbackDetector: ObservableObject {
+    @Published private(set) var hz: Float = 0
+    private var hits = [Int](repeating: 0, count: MixerClient.rtaBins)
+    private(set) var bin = -1
+
+    func update(_ m: UnsafeMutablePointer<Float>) {
+        let n = MixerClient.rtaBins
+        var best = -1
+        var bestLevel: Float = -200
+        for i in 0..<n {
+            if i < 3 || i > n - 4 { hits[i] = 0; continue }
+            let around = (m[i - 3] + m[i - 2] + m[i + 2] + m[i + 3]) / 4
+            let peak = m[i] > -45 && m[i] >= m[i - 1] && m[i] >= m[i + 1] && m[i] - around >= 12
+            hits[i] = peak ? min(hits[i] + 1, 90) : max(hits[i] - 2, 0)
+            if hits[i] >= 20 && m[i] > bestLevel { bestLevel = m[i]; best = i }
+        }
+        if best != bin {
+            bin = best
+            let f: Float = best >= 0 ? Float(20 * pow(1000, Double(best) / Double(n - 1))) : 0
+            DispatchQueue.main.async { self.hz = f }
+        }
+    }
+
+    func clear() {
+        for i in 0..<hits.count { hits[i] = 0 }
+        bin = -1
+        if hz != 0 { hz = 0 }
     }
 }
 
@@ -315,6 +417,7 @@ struct EqGraphView: View {
     let hpf: Bool
     @Binding var selected: Int
     var rtaOn = false
+    var detector: FeedbackDetector?
     @StateObject private var group: ParamGroup
     @State private var dragBand = -1
 
@@ -322,11 +425,12 @@ struct EqGraphView: View {
     private static let gridLbl = ["20", "40", "60", "80", "100", "200", "300", "400", "500", "600", "800", "1k", "2k", "3k", "4k", "5k", "6k", "8k", "10k", "20k"]
     private static let dotColors: [Color] = [Color(hex: 0x2F6FD6), Color(hex: 0x1AA6A6), Color(hex: 0xC9B81E), Color(hex: 0xB01EB5), Color(hex: 0xD6731E), Color(hex: 0x3FB64A), Color(hex: 0xD63A3A)]
 
-    init(prefix: String, bands: Int, hpf: Bool, selected: Binding<Int>, rtaOn: Bool = false) {
+    init(prefix: String, bands: Int, hpf: Bool, selected: Binding<Int>, rtaOn: Bool = false, detector: FeedbackDetector? = nil) {
         self.p = prefix
         self.bands = bands
         self.hpf = hpf
         self.rtaOn = rtaOn
+        self.detector = detector
         _selected = selected
         var addrs = ["\(prefix)/eq/on"]
         for b in 1...bands { for k in ["type", "f", "g", "q"] { addrs.append("\(prefix)/eq/\(b)/\(k)") } }
@@ -374,6 +478,17 @@ struct EqGraphView: View {
                     rc.clip(to: Path(r))
                     rc.fill(sp, with: .color(C.sends.opacity(0.24)))
                     rc.stroke(sp, with: .color(C.sends.opacity(0.6)), lineWidth: 1)
+                    if let det = detector {
+                        det.update(m)
+                        if det.bin >= 0 {
+                            let x = r.minX + r.width * CGFloat(det.bin) / CGFloat(n - 1)
+                            rc.fill(Path(CGRect(x: x - 1, y: r.minY, width: 2, height: r.height)), with: .color(C.red))
+                            let hz = Float(20 * pow(1000, Double(det.bin) / Double(n - 1)))
+                            let lbl = hz >= 1000 ? String(format: "ACOPLE %.1fk", hz / 1000) : String(format: "ACOPLE %.0f", hz)
+                            let right = x > r.minX + r.width * 0.8
+                            ctx.draw(Text(lbl).font(bf(12)).foregroundColor(C.red), at: CGPoint(x: right ? x - 5 : x + 5, y: r.minY + 10), anchor: right ? .trailing : .leading)
+                        }
+                    }
                 }
                 for (k, hz) in EqGraphView.gridHz.enumerated() {
                     let x = xHz(hz)

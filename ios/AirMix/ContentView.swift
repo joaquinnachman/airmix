@@ -17,13 +17,26 @@ struct ContentView: View {
     @State private var showNotes = false
     @State private var showConnect = false
     @State private var confirmReset = false
+    @State private var showBigTimer = false
+    @State private var locked = false
+    @State private var lockHint: String?
+    @State private var lineCheck = false
+    @State private var editFavs = false
+    @AppStorage("favs") private var favs = ""
 
     /// compact: iPhone angosto (tiras con scroll). small: cualquier pantalla baja (celular en horizontal): interfaz compacta.
     private var compact: Bool { hsc == .compact }
     private var small: Bool { compact || vsc == .compact }
 
+    private func allLayers() -> [Layer] {
+        var l = buildLayers()
+        l.append(Layer(id: l.count, label: "★ FAVORITOS", strips: favStrips(favs), fav: true))
+        return l
+    }
+
     var body: some View {
-        let layers = buildLayers()
+        let layers = allLayers()
+        ZStack(alignment: .top) {
         VStack(spacing: 0) {
             topBar
             HStack(spacing: 0) {
@@ -52,9 +65,34 @@ struct ContentView: View {
                     }
                 }
             }
+            // Candado: todo deja de responder (menos el candado), pero se sigue viendo.
+            .allowsHitTesting(!locked)
+        }
+            if core.lost {
+                Text("⚠  SE CORTÓ LA CONEXIÓN CON LA CONSOLA  ·  reconectando…")
+                    .font(bf(small ? 14 : 19)).foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity).frame(height: small ? 40 : 54)
+                    .background(C.red)
+                    .padding(.top, small ? 42 : 58)
+                    .allowsHitTesting(false)
+            }
+            if showBigTimer {
+                BigTimerView(onClose: { showBigTimer = false }, onReset: { confirmReset = true })
+                    .allowsHitTesting(!locked)
+            }
+            if let h = lockHint {
+                Text(h).font(bf(15)).foregroundColor(C.text).padding(12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(C.surface2))
+                    .padding(.top, small ? 50 : 70)
+                    .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if lockHint == h { lockHint = nil } } }
+            }
         }
         .background(C.bg.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        .confirmationDialog("¿Poner el cronómetro en cero?", isPresented: $confirmReset, titleVisibility: .visible) {
+            Button("Reset", role: .destructive) { ShowTimer.reset() }
+        }
+        .sheet(isPresented: $editFavs) { FavoritesEditor(favs: $favs) }
         .statusBarHidden(true)
         .sheet(isPresented: $showConnect) { ConnectSheet() }
         .onAppear {
@@ -85,9 +123,11 @@ struct ContentView: View {
             ForEach(Tab.allCases, id: \.self) { t in
                 Pill(text: t.rawValue, active: tab == t, style: .tab, size: small ? 11 : 15) { tab = t }
                     .frame(width: small ? 76 : 120, height: small ? 32 : 38)
+                    .allowsHitTesting(!locked)
             }
             Spacer(minLength: 0)
-            SoloChip(small: small)
+            SoloChip(small: small).allowsHitTesting(!locked)
+            lockButton
             Button { showConnect = true } label: {
                 Text(core.connected ? "●  \(core.console.model)  \(core.client.host ?? "")" : "●  SIN CONEXIÓN")
                     .font(bf(small ? 11 : 14))
@@ -100,10 +140,27 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .layoutPriority(1)
+            .allowsHitTesting(!locked)
         }
         .padding(.horizontal, small ? 8 : 12)
         .frame(height: small ? 42 : 58)
         .background(C.top)
+    }
+
+    /// CANDADO: mantener apretado para bloquear / desbloquear. La pantalla sigue prendida y mostrando todo.
+    private var lockButton: some View {
+        Text(locked ? "🔒" : "🔓")
+            .font(.system(size: small ? 15 : 18))
+            .frame(width: small ? 42 : 52, height: small ? 32 : 38)
+            .background(RoundedRectangle(cornerRadius: 10).fill(locked ? C.accent : Color.clear))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(locked ? C.accent : C.line))
+            .contentShape(Rectangle())
+            .onTapGesture { lockHint = locked ? "Mantené apretado el candado para desbloquear" : "Mantené apretado el candado para bloquear la pantalla" }
+            .onLongPressGesture(minimumDuration: 0.6) {
+                locked.toggle()
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                lockHint = locked ? "Pantalla bloqueada. Mantené el candado para desbloquear." : "Pantalla desbloqueada"
+            }
     }
 
     // MARK: riel izquierdo
@@ -123,15 +180,13 @@ struct ContentView: View {
                 .background(RoundedRectangle(cornerRadius: 12).fill(C.surface))
             }
             .onTapGesture { ShowTimer.toggle() }
-            .onLongPressGesture { confirmReset = true }
-            .confirmationDialog("¿Poner el cronómetro en cero?", isPresented: $confirmReset, titleVisibility: .visible) {
-                Button("Reset", role: .destructive) { ShowTimer.reset() }
-            }
+            // Mantener apretado: reloj gigante para mostrarle al dúo (el reset quedó adentro, manteniendo apretado).
+            .onLongPressGesture { showBigTimer = true }
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 6) {
                     ForEach(layers) { l in
-                        Pill(text: l.label, active: tab == .mix && layerIdx == l.id, activeColor: Sector.of(l.kind), style: .nav, size: small ? 11 : 14, idleColor: Sector.of(l.kind)) {
+                        Pill(text: l.label, active: tab == .mix && layerIdx == l.id, activeColor: l.fav ? C.yellow : Sector.of(l.kind), style: .nav, size: small ? 11 : 14, idleColor: l.fav ? C.yellow : Sector.of(l.kind)) {
                             layerIdx = l.id
                             tab = .mix
                             detail = nil
@@ -164,12 +219,19 @@ struct ContentView: View {
         case .meters:
             VStack(spacing: 0) {
                 HStack {
+                    Pill(text: "LINE CHECK", active: lineCheck, activeColor: C.green, style: .outline, size: small ? 12 : 14) { lineCheck.toggle() }
+                        .frame(width: small ? 116 : 140, height: small ? 32 : 40)
+                    if lineCheck {
+                        Text("Verde = llega señal · gris = no llega nada · borde rojo = clip")
+                            .font(bf(small ? 11 : 14)).foregroundColor(C.dim).lineLimit(1).minimumScaleFactor(0.6)
+                            .padding(.leading, 10)
+                    }
                     Spacer()
                     Pill(text: "CLR SOLO", style: .outline, size: small ? 12 : 14) { clearSolos() }
                         .frame(width: small ? 100 : 120, height: small ? 32 : 40)
                 }
                 .padding(.horizontal, 16).padding(.top, 6)
-                AllMetersView()
+                if lineCheck { LineCheckView() } else { AllMetersView() }
             }
         case .scenes: ScenesView()
         }
@@ -190,9 +252,15 @@ struct ContentView: View {
                             .background(RoundedRectangle(cornerRadius: 10).fill(C.surface2))
                     }.buttonStyle(.plain)
                 } else {
-                    RoundedRectangle(cornerRadius: 3).fill(Sector.of(layer?.kind ?? .ch)).frame(width: 6, height: 26)
-                    Text(layer?.label ?? "").font(bf(small ? 14 : 20)).foregroundColor(Sector.of(layer?.kind ?? .ch))
+                    let sc = layer?.fav == true ? C.yellow : Sector.of(layer?.kind ?? .ch)
+                    RoundedRectangle(cornerRadius: 3).fill(sc).frame(width: 6, height: 26)
+                    Text(layer?.label ?? "").font(bf(small ? 14 : 20)).foregroundColor(sc).lineLimit(1)
                     Spacer()
+                    if layer?.fav == true {
+                        Pill(text: "ELEGIR TIRAS", style: .outline, size: small ? 11 : 14) { editFavs = true }
+                            .frame(width: small ? 112 : 150, height: small ? 30 : 38)
+                    }
+                    TapButton(small: small)
                     sendsMenu(label: "SENDS ON FADER ▾", dark: false)
                 }
             }
@@ -210,8 +278,17 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    // Capas de canales: tantas tiras como haya (un par linkeado ocupa un lugar). El resto: 8 lugares fijos.
-                    let slots = layer?.kind == .ch ? strips.count : 8
+                    if layer?.fav == true && strips.isEmpty {
+                        VStack(spacing: 10) {
+                            Text("Todavía no elegiste favoritos.").font(bf(small ? 15 : 20)).foregroundColor(C.text)
+                            Text("Armá tu propia capa con las tiras que más usás (hasta \(maxFavs)): por ejemplo las voces, las pistas y un bus.")
+                                .font(bf(small ? 12 : 15)).foregroundColor(C.dim).multilineTextAlignment(.center)
+                            Pill(text: "ELEGIR TIRAS", active: true, activeColor: C.yellow, size: 16) { editFavs = true }.frame(width: 220, height: 50)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    // Capas de canales y favoritos: tantas tiras como haya (un par linkeado ocupa un lugar). El resto: 8 lugares fijos.
+                    let slots = (layer?.kind == .ch || layer?.fav == true) ? strips.count : 8
                     ForEach(0..<slots, id: \.self) { i in
                         if i < strips.count {
                             StripView(strip: strips[i], target: sends, compact: small) { openDetail($0) }.frame(maxWidth: .infinity)
@@ -274,6 +351,19 @@ struct ContentView: View {
         case "notas": showNotes = true
         case "link": Store.shared.incoming(chLinkAddr(7), .i(1))
         case "config": detail = Strip(kind: .ch, idx: 1)
+        case "favoritos":
+            favs = "CH:1;CH:2;CH:7;CH:8;BUS:1"
+            layerIdx = buildLayers().count
+        case "linecheck":
+            let now = Date().timeIntervalSince1970 + 3600
+            for i in [0, 1, 2, 6, 7] { Clip.signalAt[i] = now }
+            Clip.at[2] = now
+            tab = .meters
+            lineCheck = true
+        case "reloj": showBigTimer = true
+        case "corte":
+            core.lost = true
+            locked = true
         default: break
         }
     }
@@ -697,6 +787,13 @@ struct ScenesView: View {
     @State private var toDelete: URL?
     @State private var showAbout = false
 
+    private var phantomWarning: String {
+        guard let p = pending else { return "" }
+        let ph = Scenes.phantomOn(p)
+        return ph.isEmpty ? "\n\n48V: apagado en todas las entradas."
+            : "\n\n⚠ ESTA ESCENA PRENDE 48V EN: entrada \(ph.map(String.init).joined(separator: ", ")). El resto queda apagado."
+    }
+
     private func files() -> [URL] {
         _ = scenes.libraryVersion
         let dir = Scenes.libraryURL()
@@ -802,7 +899,7 @@ struct ScenesView: View {
         ) {
             Button("Cargar en la consola") { if let p = pending { scenes.load(p) } }
         } message: {
-            Text("Esto reemplaza la mezcla actual (\(pending?.lines.count ?? 0) bloques). Antes se verifica el formato con la consola; lo que no se pueda verificar queda como está.")
+            Text("Esto reemplaza la mezcla actual (\(pending?.lines.count ?? 0) bloques). Los links stereo y el 48V quedan como dice la escena; lo que no trae, apagado.\(phantomWarning)\n\nAntes se verifica el formato con la consola; lo que no se pueda verificar queda como está.")
         }
         .confirmationDialog("¿Borrar \(toDelete?.lastPathComponent ?? "")?", isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }), titleVisibility: .visible) {
             Button("Borrar", role: .destructive) {
@@ -841,5 +938,99 @@ struct AboutView: View {
         }
         .background(C.panel.ignoresSafeArea())
         .preferredColorScheme(.dark)
+    }
+}
+
+/// Reloj del show en pantalla completa: solo el tiempo, gigante. Toque = cerrar; mantener = poner en cero.
+struct BigTimerView: View {
+    let onClose: () -> Void
+    let onReset: () -> Void
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+            Text(ShowTimer.format(ShowTimer.elapsed()))
+                .font(.system(size: 600, weight: .bold, design: .monospaced))
+                .minimumScaleFactor(0.01)
+                .lineLimit(1)
+                .foregroundColor(.white)
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Color.black.ignoresSafeArea())
+        .contentShape(Rectangle())
+        .onTapGesture { onClose() }
+        .onLongPressGesture { onReset() }
+    }
+}
+
+/// TAP tempo: se mide en el momento del toque (no al soltar). Cambia el tiempo de todos los delays cargados.
+struct TapButton: View {
+    let small: Bool
+    @State private var flash = false
+    @State private var down = false
+    @State private var text = TapTempo.bpm > 0 ? "TAP \(TapTempo.bpm)" : "TAP"
+    var body: some View {
+        Text(text).font(bf(small ? 11 : 14)).foregroundColor(flash ? C.ink : C.text)
+            .frame(width: small ? 84 : 110, height: small ? 30 : 38)
+            .background(RoundedRectangle(cornerRadius: 10).fill(flash ? C.accent : Color.clear))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(C.line))
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !down else { return }
+                    down = true
+                    let n = TapTempo.tap(Date().timeIntervalSince1970)
+                    if n >= 0 { text = n == 0 ? "SIN DELAY" : "TAP \(TapTempo.bpm)" }
+                    flash = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) { flash = false }
+                }
+                .onEnded { _ in down = false })
+    }
+}
+
+/// Elegir las tiras de FAVORITOS (hasta maxFavs), con su nombre actual.
+struct FavoritesEditor: View {
+    @Binding var favs: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var chosen: [String] = []
+    @StateObject private var names = ParamGroup(favCandidates().map { $0.nameAddr })
+
+    var body: some View {
+        let all = favCandidates()
+        VStack(spacing: 12) {
+            HStack {
+                Text("Favoritos (hasta \(maxFavs))").font(bf(20)).foregroundColor(C.text)
+                Spacer()
+                Text("\(chosen.count) / \(maxFavs)").font(bf(15)).foregroundColor(C.dim)
+                Pill(text: "LISTO", active: true, activeColor: C.yellow, size: 15) {
+                    favs = chosen.joined(separator: ";")
+                    dismiss()
+                }.frame(width: 100, height: 40)
+            }
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 8)], spacing: 8) {
+                    ForEach(Array(all.enumerated()), id: \.offset) { i, st in
+                        let key = st.favKey
+                        let on = chosen.contains(key)
+                        let n = i < names.params.count ? (names.params[i].value?.stringValue ?? "") : ""
+                        Button {
+                            if on { chosen.removeAll { $0 == key } }
+                            else if chosen.count < maxFavs { chosen.append(key) }
+                        } label: {
+                            VStack(spacing: 2) {
+                                Text(st.title).font(bf(15))
+                                if !n.isEmpty { Text(n).font(bf(12)).lineLimit(1) }
+                            }
+                            .foregroundColor(on ? C.ink : C.text)
+                            .frame(maxWidth: .infinity).frame(height: 54)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(on ? C.yellow : C.surface2))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .background(C.bg.ignoresSafeArea())
+        .onAppear { chosen = favs.split(separator: ";").map(String.init) }
     }
 }

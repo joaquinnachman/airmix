@@ -62,6 +62,7 @@ object Scenes {
             l.add("lr/mix")
             for (i in 1..c.dcas) { l.add("dca/$i"); l.add("dca/$i/config") }
             for (i in 1..c.fxUnits) { l.add("fx/$i"); l.add("fx/$i/par") }
+            l.add("config/chlink"); l.add("config/buslink")
         } else {
             for (i in 1..32) {
                 val p = "ch/${Fmt.two(i)}"
@@ -113,6 +114,7 @@ object Scenes {
             for (i in 1..8) { l.add("dca/$i"); l.add("dca/$i/config") }
             for (i in 1..8) { l.add("fx/$i"); l.add("fx/$i/source"); l.add("fx/$i/par") }
             for (i in 0..31) l.add("headamp/" + String.format(Locale.US, "%03d", i))
+            l.add("config/chlink"); l.add("config/buslink")
         }
         return l
     }
@@ -278,7 +280,12 @@ object Scenes {
             val writes = ArrayList<Pair<String, Any>>()
             var skippedFields = 0
             var unknownBlocks = 0
+            // Links estéreo y 48V: se aplican siempre, y lo que la escena no trae vuelve a la base (OFF),
+            // para que no quede nada de la escena anterior.
+            val base = baseWrites(scene)
+            writes.addAll(base)
             for ((path, toks) in scene.lines) {
+                if (path == "config/chlink" || path == "config/buslink") continue
                 val key = patternKey(path)
                 val fields = fieldsFor(key)
                 val verified = ok[key]
@@ -288,6 +295,7 @@ object Scenes {
                 }
                 for (fi in fields.indices) {
                     if (fi >= toks.size) break
+                    if (key == "headamp/#" && fields[fi].sub == "phantom") continue // ya está en baseWrites
                     if (!verified[fi]) {
                         skippedFields++
                         continue
@@ -296,7 +304,7 @@ object Scenes {
                     writes.add("/$path/${fields[fi].sub}" to v)
                 }
             }
-            if (writes.isEmpty()) {
+            if (writes.size <= base.size) {
                 loading = false
                 onStatus?.invoke("No se pudo verificar el formato con esta consola. No se cargó nada.")
                 return@postDelayed
@@ -319,12 +327,49 @@ object Scenes {
                         val extra = StringBuilder()
                         if (skippedFields > 0) extra.append("\n• $skippedFields campos sin verificar quedaron como estaban.")
                         if (unknownBlocks > 0) extra.append("\n• $unknownBlocks bloques no soportados todavía (parámetros de FX, ruteo, etc.).")
+                        val ph = phantomOn(scene)
+                        if (ph.isNotEmpty()) extra.append("\n• 48V prendido en: entrada ${ph.joinToString(", ")}.")
                         onStatus?.invoke("✓ Escena \"${scene.name}\" cargada: ${writes.size} parámetros.$extra")
                     }
                 }
             }
             handler.post(step)
         }, 2500)
+    }
+
+    // ------------------------------------------------------------------ base: links y 48V
+
+    private fun headampPath(i: Int): String =
+        if (App.console.isX32) "headamp/" + String.format(Locale.US, "%03d", i - 1) else "headamp/${Fmt.two(i)}"
+
+    private fun headampCount(): Int = if (App.console.isX32) 32 else App.console.headamps
+
+    private fun onOff(t: String?): Int? = when (t?.uppercase(Locale.US)) { "ON" -> 1; "OFF" -> 0; else -> null }
+
+    /** Entradas (1..n) a las que la escena les prende el 48V. */
+    fun phantomOn(scene: Scene): List<Int> {
+        val out = ArrayList<Int>()
+        for (i in 1..headampCount()) {
+            val toks = scene.lines.firstOrNull { it.first == headampPath(i) }?.second ?: continue
+            if (onOff(toks.getOrNull(1)) == 1) out.add(i)
+        }
+        return out
+    }
+
+    /**
+     * Valores que se escriben siempre al cargar: links de canales y buses, y 48V de cada preamp.
+     * Si la escena no los trae, quedan en OFF (no se arrastran de la escena anterior).
+     */
+    private fun baseWrites(scene: Scene): List<Pair<String, Any>> {
+        val w = ArrayList<Pair<String, Any>>()
+        val c = App.console
+        val ch = scene.lines.firstOrNull { it.first == "config/chlink" }?.second ?: emptyList()
+        for ((k, odd) in chLinkPairs().withIndex()) w.add(chLinkAddr(odd) to (onOff(ch.getOrNull(k)) ?: 0))
+        val bus = scene.lines.firstOrNull { it.first == "config/buslink" }?.second ?: emptyList()
+        for ((k, odd) in (1 until c.buses step 2).withIndex()) w.add("/config/buslink/$odd-${odd + 1}" to (onOff(bus.getOrNull(k)) ?: 0))
+        val on = phantomOn(scene).toSet()
+        for (i in 1..headampCount()) w.add("/${headampPath(i)}/phantom" to if (i in on) 1 else 0)
+        return w
     }
 
     private fun same(a: Any, b: Any): Boolean = when {

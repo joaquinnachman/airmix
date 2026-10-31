@@ -297,9 +297,42 @@ class PanView(ctx: Context, private val addr: String) : View(ctx) {
     }
 }
 
+/**
+ * Aviso de clip: si un medidor llega a 0 dBFS, queda marcado en rojo 3 segundos (aunque el nivel ya bajó).
+ * Lo actualiza el tick central; los medidores solo lo consultan (sin asignaciones).
+ */
+object Clip {
+    const val HOLD_MS = 3000L
+    const val THRESHOLD = -0.5f
+    val at = LongArray(MixerClient.METER_COUNT)
+    /** Último momento con señal (para LINE CHECK). */
+    val signalAt = LongArray(MixerClient.METER_COUNT)
+    const val SIGNAL_DB = -50f
+
+    fun scan(m: FloatArray, now: Long) {
+        val n = minOf(m.size, at.size)
+        for (i in 0 until n) {
+            if (m[i] >= THRESHOLD) at[i] = now
+            if (m[i] >= SIGNAL_DB) signalAt[i] = now
+        }
+    }
+
+    fun on(i: Int, now: Long): Boolean = i in at.indices && at[i] != 0L && now - at[i] < HOLD_MS
+    fun signal(i: Int, now: Long): Boolean = i in signalAt.indices && signalAt[i] != 0L && now - signalAt[i] < 1500L
+
+    fun reset() {
+        java.util.Arrays.fill(at, 0L)
+        java.util.Arrays.fill(signalAt, 0L)
+    }
+}
+
 object MeterDraw {
-    /** Barra vertical de -60 a 0 dB: verde, amarillo desde -12, rojo desde -3. */
-    fun bar(c: Canvas, p: Paint, l: Float, t: Float, r: Float, b: Float, db: Float) {
+    /** Barra vertical de -60 a 0 dB: verde, amarillo desde -12, rojo desde -3. clip = marca roja arriba. */
+    fun bar(c: Canvas, p: Paint, l: Float, t: Float, r: Float, b: Float, db: Float, clip: Boolean = false) {
+        if (clip) {
+            p.color = C.RED
+            c.drawRect(l, t, r, t + maxOf((b - t) * 0.07f, 6f), p)
+        }
         if (db <= -60f) return
         val h = b - t
         val yv = b - ((db + 60f) / 60f).coerceIn(0f, 1f) * h
@@ -339,12 +372,13 @@ class MeterView(ctx: Context, private val l: Int, private val r: Int = -1) : Vie
         c.drawRect(0f, 0f, w, h, p)
         val m = App.client?.meters ?: return
         if (l !in m.indices) return
+        val now = android.os.SystemClock.uptimeMillis()
         if (r < 0 || r !in m.indices) {
-            MeterDraw.bar(c, p, 0f, 0f, w, h, m[l])
+            MeterDraw.bar(c, p, 0f, 0f, w, h, m[l], Clip.on(l, now))
         } else {
             val half = w / 2f
-            MeterDraw.bar(c, p, 0f, 0f, half - 1f, h, m[l])
-            MeterDraw.bar(c, p, half + 1f, 0f, w, h, m[r])
+            MeterDraw.bar(c, p, 0f, 0f, half - 1f, h, m[l], Clip.on(l, now))
+            MeterDraw.bar(c, p, half + 1f, 0f, w, h, m[r], Clip.on(r, now))
         }
     }
 }
@@ -377,13 +411,87 @@ class AllMetersView(ctx: Context) : View(ctx) {
         p.textSize = dpf(if (n > 50) 9f else 11f)
         p.typeface = FONT
         p.textAlign = Paint.Align.CENTER
+        val now = android.os.SystemClock.uptimeMillis()
         for (i in 0 until n) {
             val x = pad + slot * i + (slot - bw) / 2f
             p.color = C.METER_BG
             c.drawRect(x, top, x + bw, bottom, p)
-            MeterDraw.bar(c, p, x, top, x + bw, bottom, m[i])
+            MeterDraw.bar(c, p, x, top, x + bw, bottom, m[i], Clip.on(i, now))
             p.color = C.TEXT_DIM
             c.drawText(labels[i], x + bw / 2f, bottom + dpf(18f), p)
+        }
+    }
+}
+
+/**
+ * LINE CHECK (MEDIDORES): una ficha por entrada; verde si está llegando señal (en el último 1,5 s),
+ * gris si no, y borde rojo si clipeó. Para ver de un vistazo si falta algo conectado.
+ */
+class LineCheckView(ctx: Context) : View(ctx) {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val strips: List<Strip> = stripsOfKind(Kind.CH) + stripsOfKind(Kind.AUX)
+    private val names = Array(strips.size) { "" }
+    private val rect = android.graphics.RectF()
+
+    init {
+        for ((i, s) in strips.withIndex()) {
+            bind(s.nameAddr) { v ->
+                names[i] = v.toString()
+                invalidate()
+            }
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        App.meterViews.add(this)
+    }
+
+    override fun onDetachedFromWindow() {
+        App.meterViews.remove(this)
+        super.onDetachedFromWindow()
+    }
+
+    override fun onDraw(c: Canvas) {
+        val n = strips.size
+        if (n == 0) return
+        val cols = if (n <= 16) (n + 1) / 2 else 8
+        val rows = (n + cols - 1) / cols
+        val pad = dpf(12f)
+        val gap = dpf(8f)
+        val cw = (width - 2 * pad - gap * (cols - 1)) / cols
+        val ch = minOf((height - 2 * pad - gap * (rows - 1)) / rows, cw * 1.1f)
+        val now = android.os.SystemClock.uptimeMillis()
+        p.typeface = FONT
+        p.textAlign = Paint.Align.CENTER
+        for (i in 0 until n) {
+            val s = strips[i]
+            val x = pad + (i % cols) * (cw + gap)
+            val y = pad + (i / cols) * (ch + gap)
+            rect.set(x, y, x + cw, y + ch)
+            val sig = Clip.signal(s.meterL, now) || (s.meterR >= 0 && Clip.signal(s.meterR, now))
+            p.style = Paint.Style.FILL
+            p.color = if (sig) C.GREEN else C.SURFACE2
+            c.drawRoundRect(rect, dpf(12f), dpf(12f), p)
+            if (Clip.on(s.meterL, now) || (s.meterR >= 0 && Clip.on(s.meterR, now))) {
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = dpf(4f)
+                p.color = C.RED
+                c.drawRoundRect(rect, dpf(12f), dpf(12f), p)
+                p.style = Paint.Style.FILL
+            }
+            p.color = if (sig) C.INK else C.TEXT_DIM
+            p.textSize = minOf(ch * 0.2f, dpf(22f))
+            c.drawText(s.title, x + cw / 2f, y + ch * 0.42f, p)
+            val nm = names[i]
+            if (nm.isNotEmpty()) {
+                p.textSize = minOf(ch * 0.16f, dpf(16f))
+                p.color = if (sig) C.INK else C.TEXT
+                c.drawText(nm, x + cw / 2f, y + ch * 0.68f, p)
+            }
+            p.textSize = minOf(ch * 0.11f, dpf(11f))
+            p.color = if (sig) C.INK else C.TICK
+            c.drawText(if (sig) "SEÑAL" else "SIN SEÑAL", x + cw / 2f, y + ch * 0.88f, p)
         }
     }
 }

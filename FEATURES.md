@@ -34,3 +34,13 @@
 | ACERCA DE (ESCENAS) | ✅ | ✅ |
 | Capturas automáticas en CI (Robolectric / simulador) adjuntas al Release | ✅ | ✅ |
 | Acentos de color por sector (Sector en Ui.kt / Theme.swift) | ✅ | ✅ |
+| Cargar escena: links (chlink/buslink) y 48V según la escena, lo que falta en OFF; aviso de 48V | ✅ | ✅ |
+| Copia de escenas importadas a Descargas/AirMix + RECUPERAR ESCENAS | ✅ | — (iOS: Archivos → AirMix ya sobrevive a los updates) |
+| Reloj SHOW gigante (mantener apretado) | ✅ | ✅ |
+| Franja roja + vibración al perder la consola | ✅ | ✅ (vibra solo en iPhone) |
+| Candado de pantalla (mantener apretado) | ✅ | ✅ |
+| TAP tempo a todos los delays cargados | ✅ | ✅ |
+| Marca de clip 3 s en todos los medidores | ✅ | ✅ |
+| Detector de acople en el RTA + corte sugerido | ✅ | ✅ |
+| LINE CHECK en MEDIDORES | ✅ | ✅ |
+| Capa ★ FAVORITOS (hasta 8 tiras) | ✅ | ✅ |

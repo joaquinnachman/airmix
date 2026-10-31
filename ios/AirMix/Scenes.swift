@@ -52,6 +52,7 @@ final class Scenes: ObservableObject {
             l.append("lr/mix")
             for i in 1...c.dcas { l.append("dca/\(i)"); l.append("dca/\(i)/config") }
             for i in 1...c.fxUnits { l.append("fx/\(i)"); l.append("fx/\(i)/par") }
+            l.append("config/chlink"); l.append("config/buslink")
         } else {
             for i in 1...32 {
                 let p = "ch/\(Fmt.two(i))"
@@ -103,6 +104,7 @@ final class Scenes: ObservableObject {
             for i in 1...8 { l.append("dca/\(i)"); l.append("dca/\(i)/config") }
             for i in 1...8 { l.append("fx/\(i)"); l.append("fx/\(i)/source"); l.append("fx/\(i)/par") }
             for i in 0...31 { l.append("headamp/" + String(format: "%03d", i)) }
+            l.append("config/chlink"); l.append("config/buslink")
         }
         return l
     }
@@ -264,17 +266,22 @@ final class Scenes: ObservableObject {
             var writes: [(String, OscArg)] = []
             var skipped = 0
             var unknown = 0
+            // Links estéreo y 48V: se aplican siempre; lo que la escena no trae queda en OFF.
+            let base = Scenes.baseWrites(scene)
+            writes.append(contentsOf: base)
             for (path, toks) in scene.lines {
+                if path == "config/chlink" || path == "config/buslink" { continue }
                 let key = Scenes.patternKey(path)
                 guard let fields = fieldsFor(key), let verified = ok[key] else { unknown += 1; continue }
                 for fi in 0..<fields.count {
                     if fi >= toks.count { break }
+                    if key == "headamp/#" && fields[fi].sub == "phantom" { continue }
                     if !verified[fi] { skipped += 1; continue }
                     guard let v = Scenes.convert(fields[fi], toks[fi]) else { continue }
                     writes.append(("/\(path)/\(fields[fi].sub)", v))
                 }
             }
-            if writes.isEmpty {
+            if writes.count <= base.count {
                 busy = false
                 status = "No se pudo verificar el formato con esta consola. No se cargó nada."
                 return
@@ -295,11 +302,52 @@ final class Scenes: ObservableObject {
                     var extra = ""
                     if skipped > 0 { extra += "\n• \(skipped) campos sin verificar quedaron como estaban." }
                     if unknown > 0 { extra += "\n• \(unknown) bloques no soportados todavía (parámetros de FX, ruteo, etc.)." }
+                    let ph = Scenes.phantomOn(scene)
+                    if !ph.isEmpty { extra += "\n• 48V prendido en: entrada \(ph.map(String.init).joined(separator: ", "))." }
                     status = "✓ Escena \"\(scene.name)\" cargada: \(writes.count) parámetros.\(extra)"
                 }
             }
             step()
         }
+    }
+
+    // MARK: base: links y 48V (igual que Scenes.kt)
+
+    static func headampPath(_ i: Int) -> String {
+        Core.shared.console.isX32 ? "headamp/" + String(format: "%03d", i - 1) : "headamp/\(Fmt.two(i))"
+    }
+
+    static func headampCount() -> Int { Core.shared.console.isX32 ? 32 : Core.shared.console.headamps }
+
+    static func onOff(_ t: String?) -> Int? {
+        switch t?.uppercased() { case "ON": return 1; case "OFF": return 0; default: return nil }
+    }
+
+    /// Entradas (1..n) a las que la escena les prende el 48V.
+    static func phantomOn(_ scene: SceneFile) -> [Int] {
+        var out: [Int] = []
+        for i in 1...max(1, headampCount()) {
+            guard let toks = scene.lines.first(where: { $0.0 == headampPath(i) })?.1 else { continue }
+            if onOff(toks.count > 1 ? toks[1] : nil) == 1 { out.append(i) }
+        }
+        return out
+    }
+
+    /// Links de canales y buses + 48V de cada preamp. Lo que la escena no trae queda en OFF.
+    static func baseWrites(_ scene: SceneFile) -> [(String, OscArg)] {
+        var w: [(String, OscArg)] = []
+        let c = Core.shared.console
+        let ch = scene.lines.first(where: { $0.0 == "config/chlink" })?.1 ?? []
+        for (k, odd) in chLinkPairs().enumerated() {
+            w.append((chLinkAddr(odd), .i(Int32(onOff(k < ch.count ? ch[k] : nil) ?? 0))))
+        }
+        let bus = scene.lines.first(where: { $0.0 == "config/buslink" })?.1 ?? []
+        for (k, odd) in stride(from: 1, to: c.buses, by: 2).enumerated() {
+            w.append(("/config/buslink/\(odd)-\(odd + 1)", .i(Int32(onOff(k < bus.count ? bus[k] : nil) ?? 0))))
+        }
+        let on = Set(phantomOn(scene))
+        for i in 1...max(1, headampCount()) { w.append(("/\(headampPath(i))/phantom", .i(on.contains(i) ? 1 : 0))) }
+        return w
     }
 
     static func same(_ a: OscArg, _ b: OscArg) -> Bool {

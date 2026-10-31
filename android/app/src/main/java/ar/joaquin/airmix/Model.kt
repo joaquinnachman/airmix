@@ -222,7 +222,7 @@ fun stripsOfKind(k: Kind): List<Strip> {
 }
 
 /** Una "capa" del riel izquierdo: hasta 8 tiras. */
-class Layer(val label: String, val strips: List<Strip>) {
+class Layer(val label: String, val strips: List<Strip>, val fav: Boolean = false) {
     val kind: Kind get() = strips.firstOrNull()?.kind ?: Kind.CH
 }
 
@@ -265,6 +265,38 @@ fun buildLayers(): List<Layer> {
     out.add(Layer("DCA", stripsOfKind(Kind.DCA)))
     return out
 }
+
+/** Tira -> "CH:1" para guardar favoritos (igual en iOS). */
+fun Strip.favKey(): String = "${kind.name}:$idx"
+
+/**
+ * Favoritos guardados -> tiras. Un canal que forma parte de un par linkeado se muestra como el par
+ * (una sola vez aunque estén marcados los dos).
+ */
+fun favStrips(saved: String): List<Strip> {
+    val links = linkedPairs()
+    val out = ArrayList<Strip>()
+    for (tok in saved.split(';')) {
+        val parts = tok.split(':')
+        if (parts.size != 2) continue
+        val kind = try { Kind.valueOf(parts[0]) } catch (_: Exception) { continue }
+        val idx = parts[1].toIntOrNull() ?: continue
+        if (stripsOfKind(kind).none { it.idx == idx }) continue
+        var s = Strip(kind, idx)
+        if (kind == Kind.CH) {
+            if (idx % 2 == 1 && idx in links) s = Strip(Kind.CH, idx, pair = true)
+            else if (idx % 2 == 0 && (idx - 1) in links) s = Strip(Kind.CH, idx - 1, pair = true)
+        }
+        if (s !in out) out.add(s)
+    }
+    return out
+}
+
+/** Todas las tiras que se pueden elegir como favoritas. */
+fun favCandidates(): List<Strip> =
+    listOf(Kind.CH, Kind.AUX, Kind.RTN, Kind.BUS, Kind.MTX, Kind.FXSEND, Kind.DCA).flatMap { stripsOfKind(it) }
+
+const val MAX_FAVS = 8
 
 fun sectionsFor(s: Strip): List<Section> = when (s.kind) {
     Kind.CH -> listOf(Section.CONFIG, Section.GATE, Section.DYN, Section.EQ, Section.SENDS)

@@ -1,4 +1,6 @@
 import Foundation
+import AudioToolbox
+import UIKit
 import Combine
 
 /// Un parámetro de la consola. Cada vista observa solo los que usa.
@@ -117,6 +119,9 @@ final class Core: ObservableObject {
     @Published var layoutVersion = 0
     /// Pares estéreo linkeados (canal impar). Al cambiar se rearman las capas.
     @Published var links: Set<Int> = []
+    /// Se cortó la conexión después de haber estado conectados (franja roja + vibración).
+    @Published var lost = false
+    private var everConnected = false
     private var linkTick = 0
     private var watched = Set<String>()
 
@@ -139,6 +144,11 @@ final class Core: ObservableObject {
     private func watchLinks() {
         for p in chLinkPairs() {
             let a = chLinkAddr(p)
+            if !watched.contains(a) { watched.insert(a); _ = Store.shared.param(a) }
+        }
+        // Tipos de efecto cargados (para TAP tempo).
+        for n in 1...max(1, TapTempo.slots()) {
+            let a = "/fx/\(n)/type"
             if !watched.contains(a) { watched.insert(a); _ = Store.shared.param(a) }
         }
     }
@@ -190,6 +200,7 @@ final class Core: ObservableObject {
             if now != links { links = now }
         }
         let c = client.isConnected()
+        if c { Clip.scan(client.meters, now: Date().timeIntervalSince1970) }
         if c {
             requeryTick += 1
             if requeryTick >= 45 { requeryTick = 0; Store.shared.requeryMissing() }
@@ -201,7 +212,16 @@ final class Core: ObservableObject {
                 Store.shared.requeryWanted()
             } else {
                 client.clearMeters()
+                Clip.reset()
             }
+            let shouldShow = !c && everConnected
+            if shouldShow && !lost {
+                // Vibra (en iPhone; el iPad no tiene motor de vibración) y avisa.
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+            }
+            lost = shouldShow
+            if c { everConnected = true }
         }
     }
 }

@@ -73,6 +73,11 @@ class ScreensTest {
         shoot(act, "$prefix-3-link-7-8")
         call(act, "openDetail", Strip(Kind.CH, 1))
         shoot(act, "$prefix-4-config")
+        for ((i, name) in listOf("favoritos", "linecheck", "reloj", "corte").withIndex()) {
+            act.debugScreen(name)
+            idle()
+            shoot(act, "$prefix-${5 + i}-$name")
+        }
         App.store.incoming(chLinkAddr(7), 0)
     }
 

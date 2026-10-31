@@ -1,5 +1,17 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.5.0
+- **Escenas sin arrastrar la anterior.** Al cargar una escena, los LINK STEREO (canales y buses) y el 48V quedan como dice la escena; lo que la escena no trae queda apagado. Antes de cargar, la app avisa en qué entradas va a prender 48V. Las escenas nuevas guardan también los links.
+- **Respaldo de escenas (Android).** Las escenas que abrís con ABRIR .scn también se copian a Descargas/AirMix. Si la app arranca sin escenas (por ejemplo después de reinstalar), aparece "RECUPERAR ESCENAS DE DESCARGAS/AIRMIX".
+- **Reloj gigante.** Mantené apretado el reloj SHOW: pantalla completa, solo el tiempo. Un toque lo cierra; mantener apretado ahí lo pone en cero.
+- **Corte de conexión.** Si se pierde la consola, aparece una franja roja arriba y la tablet vibra; la app se reconecta sola.
+- **Candado** en la barra de arriba, al lado de la conexión: mantenelo apretado y la pantalla queda congelada (se sigue viendo todo, no se apaga). Para desbloquear, mantenelo apretado otra vez.
+- **TAP tempo** en la pantalla principal: tocalo al ritmo del tema (en negras) y el tiempo pasa a todos los efectos cargados que tengan delay.
+- **Clip:** si algo satura, el medidor queda marcado en rojo 3 segundos (canales, retornos, buses, efectos y main).
+- **Detector de acople** en el EQ: con el RTA prendido, marca en rojo la frecuencia que está acoplando y te sugiere "✂ CORTAR"; al tocarlo crea un corte angosto (-6 dB) en una banda libre. Si sigue, tocá de nuevo y corta 3 dB más.
+- **LINE CHECK** en MEDIDORES: una ficha por entrada, verde si llega señal y gris si no.
+- **★ FAVORITOS** en el riel: tu propia capa con hasta 8 tiras (ELEGIR TIRAS).
+
 ## Novedades 0.4.8
 - Arreglo: el MUTE del MAIN LR se desmuteaba solo al soltar el dedo después de mantenerlo 2 s. Ahora queda muteado.
 

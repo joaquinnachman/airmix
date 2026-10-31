@@ -429,6 +429,41 @@ struct DynPanel: View {
 
 // MARK: EQ
 
+extension EqPanel {
+    /// Corte de acople (igual que cutFeedback en Android): si ya hay una banda PEQ cortando cerca (±1/6 de octava)
+    /// la baja 3 dB más; si no, usa la banda libre (PEQ/VEQ en 0 dB) más cercana: PEQ, -6 dB, Q 8.
+    static func cutFeedback(_ p: String, bands: Int, hz: Float) -> Int {
+        let st = Store.shared
+        let target = min(max(Fmt.logInv(20, 20000, hz), 0), 1)
+        let near: Float = 1.0 / 18.0
+        for b in 1...bands {
+            let type = st.int("\(p)/eq/\(b)/type", def: 2)
+            let g = Fmt.lin(-15, 15, st.float("\(p)/eq/\(b)/g", def: 0.5))
+            if type == 2 && g < -0.5 && abs(st.float("\(p)/eq/\(b)/f", def: 0.5) - target) < near {
+                st.set("\(p)/eq/\(b)/g", .f((max(g - 3, -15) + 15) / 30))
+                if st.int("\(p)/eq/on", def: 1) == 0 { st.set("\(p)/eq/on", .i(1)) }
+                return b
+            }
+        }
+        var best = -1
+        var dist: Float = 2
+        for b in 1...bands {
+            let type = st.int("\(p)/eq/\(b)/type", def: 2)
+            let g = Fmt.lin(-15, 15, st.float("\(p)/eq/\(b)/g", def: 0.5))
+            guard (type == 2 || type == 3) && abs(g) < 0.5 else { continue }
+            let d = abs(st.float("\(p)/eq/\(b)/f", def: 0.5) - target)
+            if d < dist { dist = d; best = b }
+        }
+        if best < 0 { return -1 }
+        st.set("\(p)/eq/\(best)/type", .i(2))
+        st.set("\(p)/eq/\(best)/f", .f(target))
+        st.set("\(p)/eq/\(best)/g", .f((-6 + 15) / 30))
+        st.set("\(p)/eq/\(best)/q", .f(Fmt.logInv(10, 0.3, 8)))
+        if st.int("\(p)/eq/on", def: 1) == 0 { st.set("\(p)/eq/on", .i(1)) }
+        return best
+    }
+}
+
 /// RTA prendido/apagado (se recuerda mientras la app está abierta).
 var eqRtaOn = true
 
@@ -440,6 +475,8 @@ struct EqPanel: View {
     @State private var selected = 1
     @State private var rta = eqRtaOn
     @State private var confirmReset = false
+    @State private var cutMsg: String?
+    @StateObject private var detector = FeedbackDetector()
     @Environment(\.verticalSizeClass) private var vsc
     private let eqTypes = ["LCut", "LShv", "PEQ", "VEQ", "HShv", "HCut"]
 
@@ -457,16 +494,33 @@ struct EqPanel: View {
                     Pill(text: names[i - 1], active: selected == i, style: .tab, size: 14) { selected = i }.frame(width: 84, height: 40)
                 }
                 Spacer()
+                // Acople detectado en el RTA: se sugiere un corte angosto (se aplica solo si lo tocás).
+                if detector.hz > 0 {
+                    Pill(text: "✂ CORTAR \(Fmt.hz(detector.hz))", active: true, activeColor: C.red, size: 13) {
+                        let b = EqPanel.cutFeedback(prefix, bands: bands, hz: detector.hz)
+                        if b < 0 { cutMsg = "No hay una banda libre para el corte: liberá una (ganancia en 0 dB)." }
+                        else { selected = b; cutMsg = "Corte en \(Fmt.hz(detector.hz)) (banda \(names[b - 1])). Si sigue, tocá de nuevo para cortar más." }
+                    }.frame(width: 190, height: 40)
+                }
                 Pill(text: "RTA", active: rta, activeColor: C.sends, style: .outline, size: 14) {
                     rta.toggle()
                     eqRtaOn = rta
                     Core.shared.client.setRta(rta)
+                    if !rta { detector.clear() }
                 }.frame(width: 64, height: 40)
                 Pill(text: "RESET", style: .outline, size: 14) { confirmReset = true }.frame(width: 80, height: 40)
             }
             }
             .frame(height: 46)
-            EqGraphView(prefix: prefix, bands: bands, hpf: hpf, selected: $selected, rtaOn: rta)
+            EqGraphView(prefix: prefix, bands: bands, hpf: hpf, selected: $selected, rtaOn: rta, detector: detector)
+                .overlay(alignment: .bottom) {
+                    if let m = cutMsg {
+                        Text(m).font(bf(13)).foregroundColor(C.text).padding(10)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(C.surface2))
+                            .padding(.bottom, 30)
+                            .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { cutMsg = nil } }
+                    }
+                }
             ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
                 if selected == 0 {

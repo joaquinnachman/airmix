@@ -11,8 +11,8 @@ android {
         applicationId = "ar.joaquin.airmix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.4.8"
+        versionCode = 14
+        versionName = "0.5.0"
     }
 
     // Firma fija guardada en el repo: si cada compilación usara una clave nueva, Android rechaza la
