@@ -429,6 +429,14 @@ class AllMetersView(ctx: Context) : View(ctx) {
  */
 class LineCheckView(ctx: Context) : View(ctx) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    /** Tamaño de letra que entra en el ancho de la ficha (achica si el nombre es largo). */
+    private fun fit(t: String, size: Float, w: Float) {
+        p.textSize = size
+        val tw = p.measureText(t)
+        val room = w - dpf(12f)
+        if (tw > room && tw > 0f) p.textSize = size * room / tw
+    }
     private val strips: List<Strip> = stripsOfKind(Kind.CH) + stripsOfKind(Kind.AUX)
     private val names = Array(strips.size) { "" }
     private val rect = android.graphics.RectF()
@@ -481,11 +489,11 @@ class LineCheckView(ctx: Context) : View(ctx) {
                 p.style = Paint.Style.FILL
             }
             p.color = if (sig) C.INK else C.TEXT_DIM
-            p.textSize = minOf(ch * 0.2f, dpf(22f))
+            fit(s.title, minOf(ch * 0.2f, dpf(22f)), cw)
             c.drawText(s.title, x + cw / 2f, y + ch * 0.42f, p)
             val nm = names[i]
             if (nm.isNotEmpty()) {
-                p.textSize = minOf(ch * 0.16f, dpf(16f))
+                fit(nm, minOf(ch * 0.16f, dpf(16f)), cw)
                 p.color = if (sig) C.INK else C.TEXT
                 c.drawText(nm, x + cw / 2f, y + ch * 0.68f, p)
             }

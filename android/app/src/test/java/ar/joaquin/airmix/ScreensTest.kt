@@ -73,6 +73,8 @@ class ScreensTest {
         shoot(act, "$prefix-3-link-7-8")
         call(act, "openDetail", Strip(Kind.CH, 1))
         shoot(act, "$prefix-4-config")
+        // Deja pasar el "corte" inicial (sin consola en el test), que limpia las marcas de señal/clip.
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(5))
         for ((i, name) in listOf("favoritos", "linecheck", "reloj", "corte").withIndex()) {
             act.debugScreen(name)
             idle()

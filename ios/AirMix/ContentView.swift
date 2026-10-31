@@ -948,7 +948,7 @@ struct BigTimerView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { _ in
             Text(ShowTimer.format(ShowTimer.elapsed()))
-                .font(.system(size: 600, weight: .bold, design: .monospaced))
+                .font(.system(size: 600, weight: .bold).monospacedDigit())
                 .minimumScaleFactor(0.01)
                 .lineLimit(1)
                 .foregroundColor(.white)

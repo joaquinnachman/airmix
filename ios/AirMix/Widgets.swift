@@ -333,9 +333,17 @@ struct LineCheckView: View {
                         ctx.stroke(shape, with: .color(C.red), lineWidth: 4)
                     }
                     let name = i < names.params.count ? (names.params[i].value?.stringValue ?? "") : ""
-                    ctx.draw(Text(s.title).font(bf(min(ch * 0.2, 22))).foregroundColor(sig ? C.ink : C.dim), at: CGPoint(x: x + cw / 2, y: y + ch * 0.36))
+                    // Achica la letra si el texto no entra en la ficha.
+                    func fitted(_ t: String, _ size: CGFloat, _ color: Color) -> GraphicsContext.ResolvedText {
+                        let r = ctx.resolve(Text(t).font(bf(size)).foregroundColor(color))
+                        let w = r.measure(in: CGSize(width: 2000, height: 200)).width
+                        let room = cw - 12
+                        if w <= room || w <= 0 { return r }
+                        return ctx.resolve(Text(t).font(bf(size * room / w)).foregroundColor(color))
+                    }
+                    ctx.draw(fitted(s.title, min(ch * 0.2, 22), sig ? C.ink : C.dim), at: CGPoint(x: x + cw / 2, y: y + ch * 0.36))
                     if !name.isEmpty {
-                        ctx.draw(Text(name).font(bf(min(ch * 0.16, 16))).foregroundColor(sig ? C.ink : C.text), at: CGPoint(x: x + cw / 2, y: y + ch * 0.62))
+                        ctx.draw(fitted(name, min(ch * 0.16, 16), sig ? C.ink : C.text), at: CGPoint(x: x + cw / 2, y: y + ch * 0.62))
                     }
                     ctx.draw(Text(sig ? "SEÑAL" : "SIN SEÑAL").font(bf(min(ch * 0.11, 11))).foregroundColor(sig ? C.ink : C.tick), at: CGPoint(x: x + cw / 2, y: y + ch * 0.85))
                 }
