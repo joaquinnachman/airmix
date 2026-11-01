@@ -75,7 +75,7 @@ class ScreensTest {
         shoot(act, "$prefix-4-config")
         // Deja pasar el "corte" inicial (sin consola en el test), que limpia las marcas de señal/clip.
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(5))
-        for ((i, name) in listOf("favoritos", "linecheck", "reloj", "corte").withIndex()) {
+        for ((i, name) in listOf("favoritos", "linecheck", "reloj", "efectos", "corte").withIndex()) {
             act.debugScreen(name)
             idle()
             shoot(act, "$prefix-${5 + i}-$name")

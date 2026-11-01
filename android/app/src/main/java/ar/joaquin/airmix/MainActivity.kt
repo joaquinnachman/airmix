@@ -439,6 +439,13 @@ class MainActivity : Activity() {
                 bigTimer.visibility = View.VISIBLE
                 bigTimerText.text = "1:23:45"
             }
+            "efectos" -> {
+                bigTimer.visibility = View.GONE
+                for ((n, t) in listOf(0, 10, 13, 21).withIndex()) App.store.incoming("/fx/${n + 1}/type", t)
+                for (n in 1..4) for (k in 1..12) App.store.incoming("/fx/$n/par/${Fmt.two(k)}", (k * 7 % 10) / 10f)
+                tab = Tab.FX
+                render()
+            }
             "corte" -> {
                 bigTimer.visibility = View.GONE
                 tab = Tab.MIX
@@ -500,7 +507,7 @@ class MainActivity : Activity() {
 
     /** Riel izquierdo: capas (con scroll si son muchas, ej. X32) + MUTE FX + CLR SOLO siempre a mano. */
     private fun rebuildRail() {
-        layers = buildLayers() + Layer("★ FAVORITOS", favStrips(prefs().getString("favs", "") ?: ""), fav = true)
+        layers = buildLayers() + Layer("FAVS ⭐️", favStrips(prefs().getString("favs", "") ?: ""), fav = true)
         if (layerIdx >= layers.size) layerIdx = 0
         rail.removeAllViews()
         layerBtns.clear()
@@ -585,7 +592,7 @@ class MainActivity : Activity() {
                 val d = detail
                 if (d != null) buildDetail(d) else buildHome()
             }
-            Tab.FX -> Panels.effects(this)
+            Tab.FX -> Rack.build(this)
             Tab.METERS -> buildMeters()
             Tab.SCENES -> buildScenes()
         }

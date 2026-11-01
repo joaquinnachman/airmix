@@ -262,8 +262,27 @@ fun buildLayers(): List<Layer> {
     else for (g in buses.chunked(8)) out.add(Layer("BUS ${g.first().idx}-${g.last().idx}", g))
     if (c.matrices > 0) out.add(Layer("MATRIX", stripsOfKind(Kind.MTX)))
     if (c.fxSends > 0) out.add(Layer("FX SENDS", stripsOfKind(Kind.FXSEND)))
-    out.add(Layer("DCA", stripsOfKind(Kind.DCA)))
+    // DCA ya no va en el riel (pedido de Joaquín): se puede sumar a FAVS si hace falta.
     return out
+}
+
+/**
+ * Entradas físicas que se le pueden asignar a un canal (índice = valor de insrc / source). Igual en iOS.
+ * X Air: /ch/NN/config/insrc 0.. = IN 01.. (tantas como entradas tenga la consola).
+ * X32: /ch/NN/config/source 0 = OFF, 1-32 local, 33-80 AES50 A, 81-128 AES50 B, 129-160 tarjeta, 161-166 AUX, 167-168 talkback.
+ */
+fun sourceOptions(): List<String> {
+    val c = App.console
+    if (!c.isX32) return (1..c.channels).map { "IN ${Fmt.two(it)}" }
+    val l = ArrayList<String>()
+    l.add("OFF")
+    for (i in 1..32) l.add("IN ${Fmt.two(i)}")
+    for (i in 1..48) l.add("AES50 A ${Fmt.two(i)}")
+    for (i in 1..48) l.add("AES50 B ${Fmt.two(i)}")
+    for (i in 1..32) l.add("CARD ${Fmt.two(i)}")
+    for (i in 1..6) l.add("AUX ${i}")
+    l.add("TALKBACK INT"); l.add("TALKBACK EXT")
+    return l
 }
 
 /** Tira -> "CH:1" para guardar favoritos (igual en iOS). */

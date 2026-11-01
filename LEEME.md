@@ -1,5 +1,11 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.5.1
+- **EFECTOS como rack.** Cada efecto es un equipo de rack, con un display con el nombre (tocalo para cambiar el efecto) y todas sus perillas para editar ahí mismo, más RETORNO y MUTE.
+- **Entrada física de cada canal.** En CONFIG → PREAMP, "ENTRADA" elige qué entrada de la consola usa el canal. GAIN y 48V pasan solos al preamp nuevo. Si otro canal usa la misma entrada, avisa.
+- **DCA** ya no está en el riel (se puede sumar a FAVS).
+- **FAVORITOS** ahora se llama **FAVS ⭐️**.
+
 ## Novedades 0.5.0
 - **Escenas sin arrastrar la anterior.** Al cargar una escena, los LINK STEREO (canales y buses) y el 48V quedan como dice la escena; lo que la escena no trae queda apagado. Antes de cargar, la app avisa en qué entradas va a prender 48V. Las escenas nuevas guardan también los links.
 - **Respaldo de escenas (Android).** Las escenas que abrís con ABRIR .scn también se copian a Descargas/AirMix. Si la app arranca sin escenas (por ejemplo después de reinstalar), aparece "RECUPERAR ESCENAS DE DESCARGAS/AIRMIX".

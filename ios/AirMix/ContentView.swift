@@ -30,7 +30,7 @@ struct ContentView: View {
 
     private func allLayers() -> [Layer] {
         var l = buildLayers()
-        l.append(Layer(id: l.count, label: "★ FAVORITOS", strips: favStrips(favs), fav: true))
+        l.append(Layer(id: l.count, label: "FAVS ⭐️", strips: favStrips(favs), fav: true))
         return l
     }
 
@@ -215,7 +215,7 @@ struct ContentView: View {
         switch tab {
         case .mix:
             if let d = detail { detailView(d) } else { mixView(layers) }
-        case .fx: EffectsView()
+        case .fx: RackView()
         case .meters:
             VStack(spacing: 0) {
                 HStack {
@@ -361,6 +361,10 @@ struct ContentView: View {
             tab = .meters
             lineCheck = true
         case "reloj": showBigTimer = true
+        case "efectos":
+            for (n, t) in [0, 10, 13, 21].enumerated() { Store.shared.incoming("/fx/\(n + 1)/type", .i(Int32(t))) }
+            for n in 1...4 { for k in 1...12 { Store.shared.incoming("/fx/\(n)/par/\(Fmt.two(k))", .f(Float(k * 7 % 10) / 10)) } }
+            tab = .fx
         case "corte":
             core.lost = true
             locked = true

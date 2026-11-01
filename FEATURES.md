@@ -43,4 +43,7 @@
 | Marca de clip 3 s en todos los medidores | ✅ | ✅ |
 | Detector de acople en el RTA + corte sugerido | ✅ | ✅ |
 | LINE CHECK en MEDIDORES | ✅ | ✅ |
-| Capa ★ FAVORITOS (hasta 8 tiras) | ✅ | ✅ |
+| Capa FAVS ⭐️ (hasta 8 tiras) | ✅ | ✅ |
+| EFECTOS como rack (Rack.kt / Rack.swift) | ✅ | ✅ |
+| Elegir la entrada física del canal (insrc / source) + aviso de entrada repetida | ✅ | ✅ |
+| DCA fuera del riel | ✅ | ✅ |

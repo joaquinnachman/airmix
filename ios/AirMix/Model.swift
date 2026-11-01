@@ -221,6 +221,20 @@ struct Layer: Identifiable {
     var kind: Kind { strips.first?.kind ?? .ch }
 }
 
+/// Entradas físicas que se le pueden asignar a un canal (índice = valor de insrc / source). Igual que en Model.kt.
+func sourceOptions() -> [String] {
+    let c = Core.shared.console
+    if !c.isX32 { return (1...max(1, c.channels)).map { "IN \(Fmt.two($0))" } }
+    var l = ["OFF"]
+    l += (1...32).map { "IN \(Fmt.two($0))" }
+    l += (1...48).map { "AES50 A \(Fmt.two($0))" }
+    l += (1...48).map { "AES50 B \(Fmt.two($0))" }
+    l += (1...32).map { "CARD \(Fmt.two($0))" }
+    l += (1...6).map { "AUX \($0)" }
+    l += ["TALKBACK INT", "TALKBACK EXT"]
+    return l
+}
+
 // MARK: favoritos (igual que en Model.kt)
 
 let maxFavs = 8
@@ -319,7 +333,7 @@ func buildLayers() -> [Layer] {
     if buses.count <= 8 { add("BUSES", buses) } else { for g in buses.chunked(8) { add("BUS \(g.first!.idx)-\(g.last!.idx)", g) } }
     if c.matrices > 0 { add("MATRIX", stripsOfKind(.mtx)) }
     if c.fxSends > 0 { add("FX SENDS", stripsOfKind(.fxsend)) }
-    add("DCA", stripsOfKind(.dca))
+    // DCA ya no va en el riel (pedido de Joaquín): se puede sumar a FAVS si hace falta.
     return out
 }
 

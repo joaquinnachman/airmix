@@ -204,7 +204,11 @@ struct ConfigPanel: View {
             if strip.kind == .ch {
                 let p = strip.prefix
                 Card(title: "PREAMP") {
-                    SourceLabel(addr: strip.sourceAddr, x32: c.isX32)
+                    // ENTRADA FÍSICA del canal: se elige acá. GAIN y 48V siguen solos al preamp nuevo.
+                    HStack(spacing: 14) {
+                        ListSelector("ENTRADA", addr: strip.sourceAddr, options: sourceOptions()).frame(width: 200, height: 56)
+                        SourceDupWarning(strip: strip)
+                    }
                     if let ha = headamp {
                         GainInfo(addr: "\(ha)/gain", ha: ha).id(ha)
                     }
@@ -315,6 +319,26 @@ struct GainInfo: View {
         Text(bad ? "Preamp: \(ha) · la consola no responde" : "Preamp: \(ha)")
             .font(bf(11)).foregroundColor(bad ? C.solo : C.dim)
             .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { timedOut = true } }
+    }
+}
+
+/// Aviso si otro canal usa la misma entrada física (no está mal, pero suele ser un error).
+struct SourceDupWarning: View {
+    let strip: Strip
+    @StateObject private var group: ParamGroup
+    init(strip: Strip) {
+        self.strip = strip
+        _group = StateObject(wrappedValue: ParamGroup(stripsOfKind(.ch).map { $0.sourceAddr }))
+    }
+    var body: some View {
+        let chans = stripsOfKind(.ch)
+        let mine = Store.shared.value(strip.sourceAddr)?.intValue
+        let others = chans.filter { $0.idx != strip.idx && mine != nil && Store.shared.value($0.sourceAddr)?.intValue == mine }
+        let x32Off = Core.shared.console.isX32 && mine == 0
+        Text(others.isEmpty || x32Off ? "" : "⚠ La misma entrada la usa también: " + others.map { $0.title }.joined(separator: ", ") + ".")
+            .font(bf(13)).foregroundColor(C.yellow).lineLimit(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .id(group.params.map { $0.int ?? -1 })
     }
 }
 
@@ -622,7 +646,8 @@ struct FxTypeLabel: View {
     }
 }
 
-struct EffectsView: View {
+/// Vista vieja de EFECTOS (lista + editor). La pantalla ahora es RackView (Rack.swift).
+struct EffectsListView: View {
     @State private var sel = fxSelected
     var body: some View {
         let c = Core.shared.console

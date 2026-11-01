@@ -300,18 +300,20 @@ object Panels {
             val isX32 = App.console.isX32
 
             val pre = addCard(root, "PREAMP")
-            val src = label("", 15f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL)
-            src.bind(s.sourceAddr) { v ->
-                val x = v.asI()
-                src.text = if (isX32) {
-                    when {
-                        x == 0 -> "Fuente: OFF"
-                        x <= 32 -> "Fuente: IN ${Fmt.two(x)}"
-                        else -> "Fuente: #$x"
-                    }
-                } else "Fuente: INP ${Fmt.two(x + 1)}"
+            // ENTRADA FÍSICA del canal: se elige acá. GAIN y 48V siguen solos al preamp nuevo.
+            val srcRow = row()
+            srcRow.addView(selector("ENTRADA", s.sourceAddr, sourceOptions()), lp(dp(200), dp(56)))
+            val dup = label("", 13f, C.YELLOW, Gravity.START or Gravity.CENTER_VERTICAL)
+            dup.maxLines = 2
+            val checkDup = {
+                val mine = App.store.get(s.sourceAddr)?.asI()
+                val others = stripsOfKind(Kind.CH).filter { it.idx != s.idx && App.store.get(it.sourceAddr)?.asI() == mine && mine != null }
+                dup.text = if (others.isEmpty() || (isX32 && mine == 0)) "" else
+                    "⚠ La misma entrada la usa también: " + others.joinToString(", ") { it.title } + "."
             }
-            pre.addView(src, lp(MATCH, dp(26)))
+            for (o in stripsOfKind(Kind.CH)) dup.bind(o.sourceAddr) { checkDup() }
+            srcRow.addView(dup, lp(0, dp(56), 1f).m(l = dp(14)))
+            pre.addView(srcRow, lp(MATCH, WRAP).m(b = dp(8)))
             val r3 = row()
             // GAIN y 48V dependen de la fuente del canal: se rearman cuando cambia.
             val gainSlot = FrameLayout(ctx)
