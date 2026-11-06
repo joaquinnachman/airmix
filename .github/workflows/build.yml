@@ -114,11 +114,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
+      # La web de Claraboya lee el número de versión del nombre del Release ("AirMix 0.5.1 · build N")
+      - uses: actions/checkout@v4
+        with:
+          path: src
+          sparse-checkout: android/app/build.gradle.kts
+          sparse-checkout-cone-mode: false
+      - name: Leer versión
+        id: ver
+        run: |
+          V=$(grep -oE 'versionName *= *"[^"]+"' src/android/app/build.gradle.kts | head -n1 | sed -E 's/.*"(.*)"/\1/')
+          echo "version=${V:-0.0.0}" >> "$GITHUB_OUTPUT"
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: AirMix build ${{ github.run_number }}
+          name: AirMix ${{ steps.ver.outputs.version }} · build ${{ github.run_number }}
           make_latest: true
           files: |
             android/AirMix.apk

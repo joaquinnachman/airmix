@@ -17,6 +17,14 @@ Dueño: Joaquín Nachman. Uso principal: shows del dúo Garko y Palmito con una 
   - Las dos salen en el mismo Release.
 - Antes de cerrar un cambio hay que esperar a que los dos jobs pasen.
 
+## Conexión con la web de Claraboya
+- La web (repo `joaquinnachman/claraboya`) ofrece siempre el último Release de este repo:
+  `/descargas/airmix.apk` redirige a `releases/latest/download/AirMix.apk`.
+- El número de versión que muestra la web sale del nombre del Release ("AirMix 0.5.1 · build N"),
+  que el workflow arma con `versionName` de `android/app/build.gradle.kts`.
+- Por eso, cada versión nueva sube `versionName` (y `versionCode`) y agrega sus "Novedades" en `LEEME.md`.
+- El repo es público: nada de claves ni datos privados acá.
+
 ## Pantallas chicas (regla de Joaquín, 23/10/2026)
 - En **cada** update hay que revisar también la versión de celular, no solo la de tablet:
   - pantalla MEZCLA y todas las pantallas que se tocaron;
