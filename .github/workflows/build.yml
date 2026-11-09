@@ -51,7 +51,10 @@ jobs:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
       # CFBundleVersion = número de build del CI (tag build-NN): el aviso de actualización compara contra eso.
-      - run: sed -i '' -E 's/CFBundleVersion: "[0-9]+"/CFBundleVersion: "${{ github.run_number }}"/' ios/project.yml
+      - name: Número de build en CFBundleVersion
+        run: |
+          sed -i '' -E 's/CFBundleVersion: "[0-9]+"/CFBundleVersion: "${{ github.run_number }}"/' ios/project.yml
+          grep CFBundleVersion ios/project.yml
       - run: cd ios && xcodegen generate
       - name: Compilar (sin firmar)
         run: |
