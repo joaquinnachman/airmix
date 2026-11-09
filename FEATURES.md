@@ -47,3 +47,4 @@
 | EFECTOS como rack (Rack.kt / Rack.swift) | ✅ | ✅ |
 | Elegir la entrada física del canal (insrc / source) + aviso de entrada repetida | ✅ | ✅ |
 | DCA fuera del riel | ✅ | ✅ |
+| Aviso de actualización desde GitHub Releases (Android: baja e instala; iOS: avisa y abre la página) | ✅ | ✅ |

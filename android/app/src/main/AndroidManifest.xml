@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Aviso de actualización: baja el APK nuevo del Release de GitHub y abre el instalador del sistema. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Solo Android 9 o anterior: guardar escenas en Descargas/AirMix. Desde Android 10 no hace falta. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
@@ -25,5 +27,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Entrega el APK descargado al instalador del sistema (sin dependencias: proveedor propio). -->
+        <provider
+            android:name=".UpdateProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

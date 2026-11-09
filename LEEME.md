@@ -1,5 +1,8 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.5.2
+- **Aviso de actualización.** Al abrir la app con internet, si hay una versión nueva aparece "Hay una versión nueva de AirMix · ACTUALIZAR". En Android la baja y abre el instalador: tocás "Actualizar" y se instala encima. La primera vez Android pide habilitar "Permitir de esta fuente". Nunca avisa conectada a la consola ni con el candado puesto. También: ESCENAS → ACERCA DE → "Buscar actualización". En iPhone/iPad avisa y abre la página del Release.
+
 ## Novedades 0.5.1
 - **EFECTOS como rack.** Cada efecto es un equipo de rack, con un display con el nombre (tocalo para cambiar el efecto) y todas sus perillas para editar ahí mismo, más RETORNO y MUTE.
 - **Entrada física de cada canal.** En CONFIG → PREAMP, "ENTRADA" elige qué entrada de la consola usa el canal. GAIN y 48V pasan solos al preamp nuevo. Si otro canal usa la misma entrada, avisa.

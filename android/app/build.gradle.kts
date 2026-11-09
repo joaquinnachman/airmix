@@ -11,8 +11,9 @@ android {
         applicationId = "ar.joaquin.airmix"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "0.5.1"
+        // versionCode = número de build del CI (tag build-NN): el aviso de actualización compara contra eso.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 15
+        versionName = "0.5.2"
     }
 
     // Firma fija guardada en el repo: si cada compilación usara una clave nueva, Android rechaza la

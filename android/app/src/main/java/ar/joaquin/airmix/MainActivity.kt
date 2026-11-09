@@ -100,6 +100,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         hideBars()
+        // Aviso de actualización (cada 6 h como mucho), nunca conectado a la consola ni con el candado puesto.
+        handler.postDelayed({ Updater.check(this) { App.client?.isConnected() != true && !locked } }, 3000)
         if (!ticking) {
             ticking = true
             handler.post(tick)
@@ -1368,7 +1370,8 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle("Acerca de")
             .setMessage(msg)
-            .setPositiveButton("Cerrar", null)
+            // Se cierra tocando afuera; los tres botones son acciones.
+            .setPositiveButton("Buscar actualización") { _, _ -> Updater.check(this, manual = true) { true } }
             .setNeutralButton("Reportar error") { _, _ ->
                 val i = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:joaquinnachman@gmail.com"))
                     .putExtra(Intent.EXTRA_SUBJECT, "AirMix $ver: error / sugerencia")

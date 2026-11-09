@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var lineCheck = false
     @State private var editFavs = false
     @AppStorage("favs") private var favs = ""
+    @ObservedObject private var updater = Updater.shared
 
     /// compact: iPhone angosto (tiras con scroll). small: cualquier pantalla baja (celular en horizontal): interfaz compacta.
     private var compact: Bool { hsc == .compact }
@@ -93,6 +94,17 @@ struct ContentView: View {
             Button("Reset", role: .destructive) { ShowTimer.reset() }
         }
         .sheet(isPresented: $editFavs) { FavoritesEditor(favs: $favs) }
+        .alert(item: Binding(get: { updater.available.map { UpdateItem(r: $0) } }, set: { if $0 == nil { updater.available = nil } })) { it in
+            Alert(title: Text("Hay una versión nueva de AirMix (\(it.r.version))"),
+                  message: Text((it.r.notes.isEmpty ? "" : it.r.notes + "\n\n") + "En iPhone/iPad se baja desde la página del Release."),
+                  primaryButton: .default(Text("VER")) { UIApplication.shared.open(it.r.page) },
+                  secondaryButton: .cancel(Text("Más tarde")))
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                updater.check { !core.connected && !locked }
+            }
+        }
         .statusBarHidden(true)
         .sheet(isPresented: $showConnect) { ConnectSheet() }
         .onAppear {
@@ -915,10 +927,16 @@ struct ScenesView: View {
     }
 }
 
+struct UpdateItem: Identifiable {
+    let r: Updater.Release
+    var id: Int { r.build }
+}
+
 /// ACERCA DE: autoría, contacto y créditos.
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @ObservedObject private var updater = Updater.shared
     var body: some View {
         let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         ScrollView {
@@ -936,7 +954,19 @@ struct AboutView: View {
                     .font(bf(13)).foregroundColor(C.dim)
                 Text("Tablas de efectos y formato de escenas basados en el trabajo de Patrick-Gilles Maillot. Tipografía del logo: Unbounded (SIL OFL).")
                     .font(bf(13)).foregroundColor(C.dim)
-                Pill(text: "Cerrar", style: .outline, size: 15) { dismiss() }.frame(width: 120, height: 44)
+                HStack(spacing: 12) {
+                    Pill(text: "Buscar actualización", style: .outline, size: 15) {
+                        updater.check(manual: true) { true }
+                    }.frame(width: 220, height: 44)
+                    Pill(text: "Cerrar", style: .outline, size: 15) { dismiss() }.frame(width: 120, height: 44)
+                }
+                if let r = updater.available {
+                    Pill(text: "VER VERSIÓN NUEVA (\(r.version))", active: true, activeColor: C.green, size: 15) {
+                        openURL(r.page)
+                    }.frame(width: 300, height: 44)
+                } else if let m = updater.manualResult {
+                    Text(m).font(bf(14)).foregroundColor(C.dim)
+                }
             }
             .padding(24)
         }
