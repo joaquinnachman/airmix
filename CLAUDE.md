@@ -39,3 +39,8 @@ Dueño: Joaquín Nachman. Uso principal: shows del dúo Garko y Palmito con una 
 
 ## Idioma
 - La interfaz y los textos al usuario van en castellano rioplatense.
+
+## Pendientes (desde 11/11/2026)
+- La lista está en `PENDIENTES.md` (acá) y en el documento `claude/AirMix-pendientes.md` del Proyecto "Duo GYP". Tienen que quedar iguales: al cambiar una, actualizar la otra.
+- Todos los lunes 11:32 (Buenos Aires) una tarea programada implementa "Próxima versión", compila, revisa capturas y publica el Release; la app avisa sola del update.
+- Nunca solos: "Futuro", "No hacer" y el cambio de clave de firma (obliga a desinstalar y corta el aviso de actualización).
