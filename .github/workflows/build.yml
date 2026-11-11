@@ -1,6 +1,10 @@
 name: Build Android + iOS
 on:
   push:
+    # Cambios solo de documentación (pendientes, LEEME…) no generan versión nueva:
+    # si no, la app avisaría de una "actualización" sin cambios.
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
 permissions:
   contents: write
