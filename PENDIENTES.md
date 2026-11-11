@@ -16,7 +16,7 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 
 ## Decidido: NO hacer
 - Deshacer (descartado el 31/10/2026).
-- Ideas del 31/10/2026 no elegidas: fader fino, copiar/pegar procesos, ayuda con la ganancia, reloj por tema, notas por canal, botones de volumen de la tablet, ficha técnica de la escena, aviso de batería.
+- Ideas del 31/10/2026 no elegidas: fader fino, ayuda con la ganancia, reloj por tema, notas por canal, botones de volumen de la tablet, ficha técnica de la escena, aviso de batería.
 - Del 01/11/2026, no elegidas: automix, PRE/POST de envíos, safes al cargar escenas, GEQ en buses/main, auriculares/solo.
 - Respaldo antes de cargar escena, mute groups, vista "mi monitor" para el dúo, medidor grande del MAIN: propuestos el 31/10/2026, Joaquín no los eligió.
 - **Compatibilidad con otras marcas** (Soundcraft, Yamaha, Allen & Heath, etc.) ni un clon "Bis". Joaquín lo descartó el 22/10/2026: es demasiado trabajo. No volver a proponerlo.
@@ -35,7 +35,30 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
      - con el arreglo marcaría en el canal implicado;
      - sumar también un detector sobre el MAIN LR (en su EQ o en MEDIDORES) que diga en qué frecuencia está el acople aunque no se sepa de qué canal viene.
    - En el título del EQ, mostrar de qué es el espectro ("RTA: CH 01" / "RTA: MAIN"), para que no haya dudas.
-2. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+2. **COPIAR / PEGAR seteos** (pedido del 11/11/2026: "copiar seteos, envíos enteros, buses enteros, EQs, todo lo que quiera").
+   - **Qué se copia** (cada uno por separado o todo junto):
+     - EQ completo;
+     - gate;
+     - compresor;
+     - todos los envíos de un canal (niveles, ON y paneo de cada bus y FX);
+     - CONFIG (color, low cut, phase, asignaciones a DCA y mute groups);
+     - el canal entero;
+     - un bus entero (EQ, compresor, fader, mute).
+   - **No se copia nunca solo:** el nombre, la entrada física, el GAIN ni el 48V. Copiar el 48V puede romper un micrófono; si alguna vez se quiere, que sea un tilde aparte, apagado por defecto.
+   - **Dónde:**
+     - un botón COPIAR en cada pestaña del detalle (CONFIG, GATE, DYN, EQ, ENVÍOS), que copia esa sección;
+     - en la cabecera del canal, COPIAR CANAL / COPIAR BUS (todo).
+     - Al copiar aparece un chip "📋 EQ de CH 01" en la barra de arriba, hasta que se pegue o se borre.
+   - **Pegar:**
+     - PEGAR en la misma pestaña de otro canal o bus del mismo tipo;
+     - "PEGAR EN VARIOS…": elegir varios destinos de una vez, por ejemplo el EQ de la voz a los dos micrófonos.
+     - Antes de pegar, confirmación: "Pegar EQ de CH 01 en CH 02 y CH 03".
+   - **Envíos completos:**
+     - copiar los envíos de un canal y pegarlos en otro;
+     - "copiar un bus entero": todo lo que cada canal manda a ese bus, pegado en otro bus (por ejemplo, armar el monitor de Palmito igual al de Garko y después retocar).
+   - **Paridad:** misma lista de direcciones en Model.kt y Model.swift (una tabla por sección, usando las mismas direcciones que ya usan los paneles y las escenas).
+   - **Revisar en celular:** los botones COPIAR/PEGAR no pueden tapar nada en la cabecera chica.
+3. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
    - `android/airmix-debug.keystore` está en el historial público.
    - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
    - Joaquín decide cuándo.
