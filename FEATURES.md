@@ -48,3 +48,5 @@
 | Elegir la entrada física del canal (insrc / source) + aviso de entrada repetida | ✅ | ✅ |
 | DCA fuera del riel | ✅ | ✅ |
 | Aviso de actualización desde GitHub Releases (Android: baja e instala; iOS: avisa y abre la página) | ✅ | ✅ |
+| COPIAR / PEGAR seteos (sección, tira entera, envíos al bus; pegar en varios) — Clipboard.kt / Clipboard.swift | ✅ | ✅ |
+| RTA con la fuente de la tira abierta (X Air `/-stat/rta/source`; X32 sin cambios) | ✅ | ✅ |

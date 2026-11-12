@@ -1,5 +1,9 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.5.3
+- **COPIAR / PEGAR seteos.** En el detalle de cada tira, el botón 📋 copia la sección que estás viendo (CONFIG, GATE, COMPRESOR, EQ o ENVÍOS) o la tira entera; en un bus también "ENVÍOS AL BUS" (lo que cada canal le manda), para pegarlo en otro bus. Después: "Pegar acá" o "Pegar en varios…", siempre con confirmación. Nunca se copian el nombre, la entrada física, el GAIN ni el 48V. Lo copiado se ve arriba en un chip 📋.
+- **RTA del canal (X Air).** Al abrir el EQ, el espectro es el de esa tira (canal, bus o MAIN) y no siempre el MAIN LR; arriba dice "RTA: CH 01". Al salir, la fuente del RTA vuelve a como estaba. El detector de acople ahora marca en el canal implicado, y en el EQ del MAIN detecta el acople general.
+
 ## Novedades 0.5.2
 - **Aviso de actualización.** Al abrir la app con internet, si hay una versión nueva aparece "Hay una versión nueva de AirMix · ACTUALIZAR". En Android la baja y abre el instalador: tocás "Actualizar" y se instala encima. La primera vez Android pide habilitar "Permitir de esta fuente". Nunca avisa conectada a la consola ni con el candado puesto. También: ESCENAS → ACERCA DE → "Buscar actualización". En iPhone/iPad avisa y abre la página del Release.
 

@@ -13,7 +13,7 @@ android {
         targetSdk = 35
         // versionCode = número de build del CI (tag build-NN): el aviso de actualización compara contra eso.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 15
-        versionName = "0.5.2"
+        versionName = "0.5.3"
     }
 
     // Firma fija guardada en el repo: si cada compilación usara una clave nueva, Android rechaza la

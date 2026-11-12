@@ -146,6 +146,8 @@ final class Core: ObservableObject {
             let a = chLinkAddr(p)
             if !watched.contains(a) { watched.insert(a); _ = Store.shared.param(a) }
         }
+        // Fuente del RTA (X Air): se conoce de antemano para poder devolverla al salir del EQ.
+        if !console.isX32 && !watched.contains(rtaSourceAddr) { watched.insert(rtaSourceAddr); _ = Store.shared.param(rtaSourceAddr) }
         // Tipos de efecto cargados (para TAP tempo).
         for n in 1...max(1, TapTempo.slots()) {
             let a = "/fx/\(n)/type"

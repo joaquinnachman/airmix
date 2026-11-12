@@ -139,6 +139,7 @@ struct ContentView: View {
             }
             Spacer(minLength: 0)
             SoloChip(small: small).allowsHitTesting(!locked)
+            ClipChip(small: small).allowsHitTesting(!locked)
             lockButton
             Button { showConnect = true } label: {
                 Text(core.connected ? "●  \(core.console.model)  \(core.client.host ?? "")" : "●  SIN CONEXIÓN")
@@ -395,7 +396,8 @@ struct ContentView: View {
                     ForEach(secs, id: \.self) { x in
                         SectionTab(strip: s, section: x, active: x == sec) { section = x }.frame(width: 100, height: 40)
                     }
-                    Pill(text: "‹", style: .outline, size: 22) { step(s, -1) }.frame(width: 50, height: 40).padding(.leading, 12)
+                    ClipMenu(strip: s, section: sec, small: small).padding(.leading, 12)
+                    Pill(text: "‹", style: .outline, size: 22) { step(s, -1) }.frame(width: 50, height: 40).padding(.leading, 6)
                     Pill(text: "›", style: .outline, size: 22) { step(s, 1) }.frame(width: 50, height: 40)
                 }
                 .padding(.horizontal, 10)
@@ -1066,5 +1068,113 @@ struct FavoritesEditor: View {
         .padding(18)
         .background(C.bg.ignoresSafeArea())
         .onAppear { chosen = favs.split(separator: ";").map(String.init) }
+    }
+}
+
+/// Lo copiado (COPIAR / PEGAR), en la barra de arriba. Tocarlo: pegar en varios o borrar.
+struct ClipChip: View {
+    let small: Bool
+    @ObservedObject var cb = Clipboard.shared
+    @State private var ask = false
+    @State private var many = false
+    var body: some View {
+        if let c = cb.clip {
+            Text(small ? "📋" : "📋 \(c.label)").font(bf(small ? 14 : 13)).foregroundColor(C.ink).lineLimit(1)
+                .padding(.horizontal, 10)
+                .frame(maxWidth: small ? 52 : 200).frame(height: small ? 32 : 40)
+                .background(RoundedRectangle(cornerRadius: 10).fill(C.sends))
+                .onTapGesture { ask = true }
+                .confirmationDialog("Copiado: \(c.label)", isPresented: $ask, titleVisibility: .visible) {
+                    Button("Pegar en varios…") { many = true }
+                    Button("Borrar lo copiado", role: .destructive) { cb.clear() }
+                } message: { Text("Abrí otra tira del mismo tipo y tocá 📋 → Pegar.") }
+                .sheet(isPresented: $many) { PasteManyView() }
+        }
+    }
+}
+
+/// Botón 📋 del detalle: copiar la sección / la tira entera, pegar acá o en varios.
+struct ClipMenu: View {
+    let strip: Strip
+    let section: Section
+    let small: Bool
+    @ObservedObject var cb = Clipboard.shared
+    @State private var confirmHere = false
+    @State private var many = false
+    @State private var msg: String?
+    var body: some View {
+        Menu {
+            ForEach(cb.options(strip, section), id: \.self) { w in
+                Button("Copiar " + (w == .all ? (strip.kind == .ch ? "CANAL ENTERO" : "\(strip.title) ENTERO") : w.rawValue)) {
+                    cb.copy(strip, w) { n in
+                        msg = n > 0 ? "📋 Copiado: \(cb.clip?.label ?? "") (\(n) valores)" : "No se pudo leer de la consola: ¿está conectada?"
+                    }
+                }
+            }
+            if let c = cb.clip {
+                if cb.canPaste(strip) { Button("Pegar \(c.label) acá") { confirmHere = true } }
+                Button("Pegar \(c.label) en varios…") { many = true }
+                Button("Borrar lo copiado", role: .destructive) { cb.clear() }
+            }
+        } label: {
+            Text(small ? "📋" : "📋 COPIAR / PEGAR").font(bf(14)).foregroundColor(C.text)
+                .frame(width: small ? 54 : 190, height: 40)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(C.line))
+        }
+        .confirmationDialog("Pegar \(cb.clip?.label ?? "") en \(strip.title)", isPresented: $confirmHere, titleVisibility: .visible) {
+            Button("Pegar") { cb.paste(strip); msg = "✓ Pegado en \(strip.title)" }
+        } message: { Text("Reemplaza lo que tiene ahora (no se tocan nombre, entrada, GAIN ni 48V).") }
+        .sheet(isPresented: $many) { PasteManyView() }
+        .overlay(alignment: .bottom) {
+            if let m = msg {
+                Text(m).font(bf(12)).foregroundColor(C.text).padding(8).fixedSize()
+                    .background(RoundedRectangle(cornerRadius: 8).fill(C.surface2))
+                    .offset(y: 44)
+                    .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { if msg == m { msg = nil } } }
+            }
+        }
+    }
+}
+
+/// Pegar lo copiado en varias tiras a la vez.
+struct PasteManyView: View {
+    @ObservedObject var cb = Clipboard.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var chosen: Set<Int> = []
+    @State private var confirm = false
+    var body: some View {
+        let list = cb.targets()
+        VStack(spacing: 12) {
+            HStack {
+                Text("Pegar \(cb.clip?.label ?? "") en…").font(bf(19)).foregroundColor(C.text)
+                Spacer()
+                Pill(text: "Cancelar", style: .outline, size: 14) { dismiss() }.frame(width: 110, height: 40)
+                Pill(text: "PEGAR", active: !chosen.isEmpty, activeColor: C.sends, size: 15) { if !chosen.isEmpty { confirm = true } }
+                    .frame(width: 110, height: 40)
+            }
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
+                    ForEach(list, id: \.idx) { t in
+                        let on = chosen.contains(t.idx)
+                        Button {
+                            if on { chosen.remove(t.idx) } else { chosen.insert(t.idx) }
+                        } label: {
+                            Text(t.title).font(bf(15)).foregroundColor(on ? C.ink : C.text)
+                                .frame(maxWidth: .infinity).frame(height: 50)
+                                .background(RoundedRectangle(cornerRadius: 10).fill(on ? C.sends : C.surface2))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .background(C.bg.ignoresSafeArea())
+        .confirmationDialog("Pegar en \(chosen.count) tiras", isPresented: $confirm, titleVisibility: .visible) {
+            Button("Pegar") {
+                for t in list where chosen.contains(t.idx) { cb.paste(t) }
+                dismiss()
+            }
+        } message: { Text("Reemplaza lo que tienen ahora (no se tocan nombre, entrada, GAIN ni 48V).") }
     }
 }

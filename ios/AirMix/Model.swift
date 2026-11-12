@@ -221,6 +221,25 @@ struct Layer: Identifiable {
     var kind: Kind { strips.first?.kind ?? .ch }
 }
 
+/// Fuente del RTA (igual que Model.kt). X Air: /-stat/rta/source 0-32 = Ch01..16, Aux, Fx1..4, Bus1..6, Send1..4, LR, MON.
+/// En X32 no se toca (numeración no verificada).
+let rtaSourceAddr = "/-stat/rta/source"
+
+extension Strip {
+    var rtaSource: Int? {
+        if Core.shared.console.isX32 { return nil }
+        switch kind {
+        case .ch: return idx - 1
+        case .aux: return 16
+        case .rtn: return 16 + idx
+        case .bus: return 20 + idx
+        case .fxsend: return 26 + idx
+        case .lr: return 31
+        default: return nil
+        }
+    }
+}
+
 /// Entradas físicas que se le pueden asignar a un canal (índice = valor de insrc / source). Igual que en Model.kt.
 func sourceOptions() -> [String] {
     let c = Core.shared.console

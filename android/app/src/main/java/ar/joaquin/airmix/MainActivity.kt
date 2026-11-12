@@ -50,6 +50,7 @@ class MainActivity : Activity() {
     private lateinit var rail: LinearLayout
     private lateinit var conn: Btn
     private lateinit var soloChip: Btn
+    private lateinit var clipChip: Btn
     private var shownLinks: Set<Int> = emptySet()
     private var linkTick = 0
     private val tabBtns = HashMap<Tab, Btn>()
@@ -237,6 +238,8 @@ class MainActivity : Activity() {
             val a = chLinkAddr(p)
             if (watchedLinks.add(a)) App.store.observe(a) {}
         }
+        // Fuente del RTA (X Air): se conoce de antemano para poder devolverla al salir del EQ.
+        if (!App.console.isX32 && watchedLinks.add(RTA_SOURCE)) App.store.observe(RTA_SOURCE) {}
         // Tipos de efecto cargados (para TAP tempo).
         for (n in 1..TapTempo.slots()) {
             val a = "/fx/$n/type"
@@ -328,6 +331,17 @@ class MainActivity : Activity() {
         soloChip.setOnClickListener { clearSolos() }
         soloChip.bind("/-stat/solo") { v -> soloChip.visibility = if (v.asI() != 0) View.VISIBLE else View.GONE }
         top.addView(soloChip, lp(dp(sz(96, 74)), dp(sz(40, 32))).m(r = dp(sz(8, 4))))
+        // Lo copiado (COPIAR / PEGAR): se ve hasta que se borra. En celular, solo el ícono.
+        clipChip = Btn(this, "", BtnStyle.LIGHT, sz(13f, 14f))
+        clipChip.activeColor = C.SENDS
+        clipChip.active = true
+        clipChip.maxLines = 1
+        clipChip.ellipsize = android.text.TextUtils.TruncateAt.END
+        clipChip.visibility = View.GONE
+        clipChip.setOnClickListener { clipInfo() }
+        top.addView(clipChip, lp(dp(sz(190, 52)), dp(sz(40, 32))).m(r = dp(sz(8, 4))))
+        Clipboard.onChange = { updateClipChip() }
+        updateClipChip()
         lockBtn = Btn(this, "🔓", BtnStyle.OUTLINE, sz(18f, 15f))
         lockBtn.activeColor = C.ACCENT
         lockBtn.setOnClickListener {
@@ -845,6 +859,10 @@ class MainActivity : Activity() {
             bar.addView(b, lp(dp(110), dp(42)).m(r = dp(6)))
         }
         bar.addView(View(this), lp(0, 1, 1f))
+        // COPIAR / PEGAR seteos de esta tira.
+        val cp = Btn(this, if (Layout.compact) "📋" else "📋 COPIAR / PEGAR", BtnStyle.OUTLINE, sz(15f, 16f))
+        cp.setOnClickListener { clipMenu(cp, s) }
+        bar.addView(cp, lp(dp(sz(200, 54)), dp(42)).m(r = dp(6)))
         val prev = Btn(this, "‹", BtnStyle.OUTLINE, 24f)
         prev.setOnClickListener { step(s, -1) }
         bar.addView(prev, lp(dp(54), dp(42)).m(r = dp(6)))
@@ -864,6 +882,94 @@ class MainActivity : Activity() {
         body.addView(panel, lp(0, MATCH, if (Layout.compact) 1f else 8f))
         root.addView(body, lp(MATCH, 0, 1f))
         return root
+    }
+
+    // ------------------------------------------------------------------ COPIAR / PEGAR
+
+    private fun updateClipChip() {
+        if (!::clipChip.isInitialized) return
+        val c = Clipboard.clip
+        clipChip.visibility = if (c == null) View.GONE else View.VISIBLE
+        clipChip.text = if (c == null) "" else if (Layout.compact) "📋" else "📋 ${c.label}"
+    }
+
+    private fun clipInfo() {
+        val c = Clipboard.clip ?: return
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Copiado: ${c.label}")
+            .setMessage("Abrí otra tira del mismo tipo y tocá 📋 → Pegar. También podés pegarlo en varias de una vez.")
+            .setPositiveButton("Pegar en varios…") { _, _ -> pasteMany() }
+            .setNeutralButton("Borrar lo copiado") { _, _ -> Clipboard.clear() }
+            .setNegativeButton("Cerrar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
+    }
+
+    private fun clipMenu(anchor: View, s: Strip) {
+        val pm = android.widget.PopupMenu(this, anchor)
+        val opts = Clipboard.options(s, if (detail == s) section else null)
+        opts.forEachIndexed { i, w ->
+            val what = if (w == Clipboard.What.ALL) (if (s.kind == Kind.CH) "CANAL ENTERO" else "${s.title} ENTERO") else w.label
+            pm.menu.add(0, i, i, "Copiar $what")
+        }
+        val c = Clipboard.clip
+        if (c != null && Clipboard.canPaste(s)) pm.menu.add(1, 100, 100, "Pegar ${c.label} acá")
+        if (c != null) {
+            pm.menu.add(1, 101, 101, "Pegar ${c.label} en varios…")
+            pm.menu.add(1, 102, 102, "Borrar lo copiado")
+        }
+        pm.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                100 -> confirmPaste(listOf(s))
+                101 -> pasteMany()
+                102 -> Clipboard.clear()
+                else -> {
+                    val w = opts[item.itemId]
+                    Clipboard.copy(s, w) { n ->
+                        Toast.makeText(this, if (n > 0) "📋 Copiado: ${Clipboard.clip?.label} ($n valores)" else "No se pudo leer de la consola: ¿está conectada?", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            true
+        }
+        pm.show()
+    }
+
+    private fun pasteMany() {
+        val c = Clipboard.clip ?: return
+        val list = Clipboard.targets()
+        if (list.isEmpty()) return
+        val labels = list.map { t ->
+            val n = (App.store.get(t.nameAddr) as? String).orEmpty()
+            if (n.isEmpty()) t.title else "${t.title}  ·  $n"
+        }.toTypedArray()
+        val checked = BooleanArray(list.size)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Pegar ${c.label} en…")
+            .setMultiChoiceItems(labels, checked) { _, i, on -> checked[i] = on }
+            .setPositiveButton("Siguiente") { _, _ ->
+                val sel = list.indices.filter { checked[it] }.map { list[it] }
+                if (sel.isNotEmpty()) confirmPaste(sel)
+            }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
+    }
+
+    private fun confirmPaste(targets: List<Strip>) {
+        val c = Clipboard.clip ?: return
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Pegar ${c.label}")
+            .setMessage("En: ${targets.joinToString(", ") { it.title }}.\n\nReemplaza lo que tienen ahora (no se tocan nombre, entrada, GAIN ni 48V).")
+            .setPositiveButton("Pegar") { _, _ ->
+                var n = 0
+                for (t in targets) n += Clipboard.paste(t)
+                Toast.makeText(this, "✓ Pegado en ${targets.size} ${if (targets.size == 1) "tira" else "tiras"}", Toast.LENGTH_SHORT).show()
+                if (n > 0 && detail != null) render()
+            }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
     }
 
     private fun step(s: Strip, dir: Int) {

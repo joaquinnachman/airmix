@@ -187,7 +187,7 @@ object Panels {
         Section.CONFIG -> ctx.scroll(ctx.hwrap(config(ctx, s)))
         Section.GATE -> ctx.scroll(ctx.hwrap(gate(ctx, s.prefix)))
         Section.DYN -> ctx.scroll(ctx.hwrap(dyn(ctx, s.prefix)))
-        Section.EQ -> eq(ctx, s.prefix, if (s.kind == Kind.CH) 4 else 6, s.kind == Kind.CH, s.selIdx())
+        Section.EQ -> eq(ctx, s.prefix, if (s.kind == Kind.CH) 4 else 6, s.kind == Kind.CH, s.selIdx(), s.rtaSource(), s.title)
         Section.SENDS -> sends(ctx, s)
     }
 
@@ -456,7 +456,7 @@ object Panels {
 
     // ------------------------------------------------------------------ EQ
 
-    private fun eq(ctx: Context, p: String, bands: Int, hpf: Boolean, sel: Int): View = with(ctx) {
+    private fun eq(ctx: Context, p: String, bands: Int, hpf: Boolean, sel: Int, rtaSrc: Int? = null, rtaTitle: String = ""): View = with(ctx) {
         val root = col()
         root.setPadding(dp(20), dp(14), dp(20), dp(12))
 
@@ -535,6 +535,10 @@ object Panels {
             App.client?.setRta(rtaOn)
         }
         top.addView(rta, lp(dp(72), dp(42)).m(r = dp(6)))
+        // De qué es el espectro (X Air: la app pone la fuente del RTA en esta tira).
+        if (rtaSrc != null) {
+            top.addView(label("RTA: $rtaTitle", 13f, C.SENDS, Gravity.CENTER).also { it.maxLines = 1 }, lp(dp(110), dp(42)).m(r = dp(6)))
+        }
         val rst = Btn(ctx, "RESET", BtnStyle.OUTLINE, 15f)
         rst.setOnClickListener {
             AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
@@ -550,13 +554,23 @@ object Panels {
         select(1)
         // El RTA de la consola muestra el canal seleccionado: lo seleccionamos y pedimos el RTA mientras el EQ esté a la vista.
         root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            private var prevSrc: Int? = null
+
             override fun onViewAttachedToWindow(v: View) {
                 if (sel >= 0) App.store.set("/-stat/selidx", sel)
+                // X Air: el RTA muestra la fuente elegida en la consola (por defecto MAIN LR). La ponemos en esta tira
+                // y al salir la devolvemos como estaba.
+                if (rtaSrc != null) {
+                    prevSrc = App.store.get(RTA_SOURCE)?.asI()
+                    App.store.set(RTA_SOURCE, rtaSrc)
+                }
                 App.client?.setRta(rtaOn)
             }
 
             override fun onViewDetachedFromWindow(v: View) {
                 App.client?.setRta(false)
+                val prev = prevSrc
+                if (rtaSrc != null && prev != null && prev != rtaSrc) App.store.set(RTA_SOURCE, prev)
             }
         })
         root

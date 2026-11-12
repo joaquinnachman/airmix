@@ -285,6 +285,26 @@ fun sourceOptions(): List<String> {
     return l
 }
 
+/**
+ * Fuente del RTA de la consola. X Air: /-stat/rta/source 0-32 = Ch01..16, Aux, Fx1..4, Bus1..6, Send1..4, LR, MON
+ * (behringer.world, X-Air OSC). X32 usa otra dirección/numeración (/-stat/rtasource) que no está verificada:
+ * ahí no se toca y el RTA sigue lo que tenga la consola. Igual en iOS.
+ */
+const val RTA_SOURCE = "/-stat/rta/source"
+
+fun Strip.rtaSource(): Int? {
+    if (App.console.isX32) return null
+    return when (kind) {
+        Kind.CH -> idx - 1
+        Kind.AUX -> 16
+        Kind.RTN -> 16 + idx
+        Kind.BUS -> 20 + idx
+        Kind.FXSEND -> 26 + idx
+        Kind.LR -> 31
+        else -> null
+    }
+}
+
 /** Tira -> "CH:1" para guardar favoritos (igual en iOS). */
 fun Strip.favKey(): String = "${kind.name}:$idx"
 

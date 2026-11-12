@@ -123,7 +123,8 @@ struct DetailPanel: View {
         case .config: ScrollView(axes) { ConfigPanel(strip: strip).padding(16) }
         case .gate: ScrollView(axes) { GatePanel(prefix: strip.prefix).padding(16) }
         case .dyn: ScrollView(axes) { DynPanel(prefix: strip.prefix).padding(16) }
-        case .eq: EqPanel(prefix: strip.prefix, bands: strip.kind == .ch ? 4 : 6, hpf: strip.kind == .ch, selIdx: strip.selIdx).padding(16)
+        case .eq: EqPanel(prefix: strip.prefix, bands: strip.kind == .ch ? 4 : 6, hpf: strip.kind == .ch, selIdx: strip.selIdx,
+                          rtaSrc: strip.rtaSource, rtaTitle: strip.title).padding(16)
         case .sends: SendsPanel(strip: strip).padding(12)
         }
     }
@@ -496,6 +497,9 @@ struct EqPanel: View {
     let bands: Int
     let hpf: Bool
     var selIdx = -1
+    var rtaSrc: Int? = nil
+    var rtaTitle = ""
+    @State private var prevSrc: Int?
     @State private var selected = 1
     @State private var rta = eqRtaOn
     @State private var confirmReset = false
@@ -532,6 +536,10 @@ struct EqPanel: View {
                     Core.shared.client.setRta(rta)
                     if !rta { detector.clear() }
                 }.frame(width: 64, height: 40)
+                // De qué es el espectro (X Air: la app pone la fuente del RTA en esta tira).
+                if rtaSrc != nil {
+                    Text("RTA: \(rtaTitle)").font(bf(13)).foregroundColor(C.sends).lineLimit(1).frame(width: 110)
+                }
                 Pill(text: "RESET", style: .outline, size: 14) { confirmReset = true }.frame(width: 80, height: 40)
             }
             }
@@ -568,9 +576,18 @@ struct EqPanel: View {
         // El RTA de la consola muestra el canal seleccionado: lo seleccionamos y pedimos el RTA mientras el EQ esté a la vista.
         .onAppear {
             if selIdx >= 0 { Store.shared.set("/-stat/selidx", .i(Int32(selIdx))) }
+            // X Air: el RTA muestra la fuente elegida en la consola (por defecto MAIN LR). La ponemos en esta tira
+            // y al salir la devolvemos como estaba.
+            if let src = rtaSrc {
+                prevSrc = Store.shared.value(rtaSourceAddr)?.intValue
+                Store.shared.set(rtaSourceAddr, .i(Int32(src)))
+            }
             Core.shared.client.setRta(rta)
         }
-        .onDisappear { Core.shared.client.setRta(false) }
+        .onDisappear {
+            Core.shared.client.setRta(false)
+            if let src = rtaSrc, let prev = prevSrc, prev != src { Store.shared.set(rtaSourceAddr, .i(Int32(prev))) }
+        }
         .confirmationDialog("¿Poner el EQ plano?", isPresented: $confirmReset, titleVisibility: .visible) {
             Button("Resetear", role: .destructive) { EqDefaults.reset(prefix, bands: bands) }
         } message: {
