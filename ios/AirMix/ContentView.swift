@@ -392,9 +392,9 @@ struct ContentView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     Pill(text: "‹  VOLVER", style: .outline, size: 15) { detail = nil }.frame(width: 110, height: 40)
-                    DetailTitle(strip: s).frame(width: compact ? 150 : 260, alignment: .leading).padding(.leading, 8)
+                    DetailTitle(strip: s).frame(width: compact ? 150 : 230, alignment: .leading).padding(.leading, 8)
                     ForEach(secs, id: \.self) { x in
-                        SectionTab(strip: s, section: x, active: x == sec) { section = x }.frame(width: 100, height: 40)
+                        SectionTab(strip: s, section: x, active: x == sec) { section = x }.frame(width: compact ? 84 : 96, height: 40)
                     }
                     ClipMenu(strip: s, section: sec, small: small).padding(.leading, 12)
                     Pill(text: "‹", style: .outline, size: 22) { step(s, -1) }.frame(width: 50, height: 40).padding(.leading, 6)
@@ -1117,8 +1117,8 @@ struct ClipMenu: View {
                 Button("Borrar lo copiado", role: .destructive) { cb.clear() }
             }
         } label: {
-            Text(small ? "📋" : "📋 COPIAR / PEGAR").font(bf(14)).foregroundColor(C.text)
-                .frame(width: small ? 54 : 190, height: 40)
+            Text(small ? "📋" : "📋 COPIAR").font(bf(14)).foregroundColor(C.text).lineLimit(1)
+                .frame(width: small ? 54 : 120, height: 40)
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(C.line))
         }
         .confirmationDialog("Pegar \(cb.clip?.label ?? "") en \(strip.title)", isPresented: $confirmHere, titleVisibility: .visible) {

@@ -841,7 +841,9 @@ class MainActivity : Activity() {
             val n = v.toString()
             title.text = if (n.isEmpty()) s.title else "${s.title}  ·  $n"
         }
-        bar.addView(title, lp(dp(300), MATCH).m(l = dp(16)))
+        title.maxLines = 1
+        title.ellipsize = android.text.TextUtils.TruncateAt.END
+        bar.addView(title, lp(dp(sz(230, 150)), MATCH).m(l = dp(12)))
         for (sec in secs) {
             val b = Btn(this, sec.label, BtnStyle.TAB, 16f)
             b.active = sec == section
@@ -856,13 +858,14 @@ class MainActivity : Activity() {
                 section = sec
                 render()
             }
-            bar.addView(b, lp(dp(110), dp(42)).m(r = dp(6)))
+            bar.addView(b, lp(dp(sz(96, 84)), dp(42)).m(r = dp(4)))
         }
         bar.addView(View(this), lp(0, 1, 1f))
         // COPIAR / PEGAR seteos de esta tira.
-        val cp = Btn(this, if (Layout.compact) "📋" else "📋 COPIAR / PEGAR", BtnStyle.OUTLINE, sz(15f, 16f))
+        val cp = Btn(this, if (Layout.compact) "📋" else "📋 COPIAR", BtnStyle.OUTLINE, sz(15f, 16f))
+        cp.maxLines = 1
         cp.setOnClickListener { clipMenu(cp, s) }
-        bar.addView(cp, lp(dp(sz(200, 54)), dp(42)).m(r = dp(6)))
+        bar.addView(cp, lp(dp(sz(120, 54)), dp(42)).m(r = dp(6)))
         val prev = Btn(this, "‹", BtnStyle.OUTLINE, 24f)
         prev.setOnClickListener { step(s, -1) }
         bar.addView(prev, lp(dp(54), dp(42)).m(r = dp(6)))

@@ -1,5 +1,8 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.5.4
+- La barra del detalle de canal entra entera en la tablet: las pestañas quedan más a la izquierda, el botón 📋 COPIAR es más chico y vuelven a verse las flechas ‹ › para pasar de canal.
+
 ## Novedades 0.5.3
 - **COPIAR / PEGAR seteos.** En el detalle de cada tira, el botón 📋 copia la sección que estás viendo (CONFIG, GATE, COMPRESOR, EQ o ENVÍOS) o la tira entera; en un bus también "ENVÍOS AL BUS" (lo que cada canal le manda), para pegarlo en otro bus. Después: "Pegar acá" o "Pegar en varios…", siempre con confirmación. Nunca se copian el nombre, la entrada física, el GAIN ni el 48V. Lo copiado se ve arriba en un chip 📋.
 - **RTA del canal (X Air).** Al abrir el EQ, el espectro es el de esa tira (canal, bus o MAIN) y no siempre el MAIN LR; arriba dice "RTA: CH 01". Al salir, la fuente del RTA vuelve a como estaba. El detector de acople ahora marca en el canal implicado, y en el EQ del MAIN detecta el acople general.
