@@ -23,51 +23,27 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 
 ## Próxima versión
 
-1. **El RTA del EQ muestra el MAIN LR y no el canal** (reporte de Joaquín, 04/11/2026; "pal futuro").
-   - Las perillas y la curva del EQ sí son del canal; el espectro de fondo es el que manda la consola.
-   - **Causa probable:** la XR12 manda el RTA de la fuente que tenga elegida (por defecto, MAIN LR). La app solo cambia el canal seleccionado (`/-stat/selidx`) y no la fuente del RTA.
-   - **Arreglo:**
-     - al abrir el EQ de un canal, poner la fuente del RTA de la consola en "canal seleccionado" y seleccionar el canal;
-     - al salir, devolverla como estaba.
-     - Verificar la dirección OSC exacta de la fuente del RTA en X Air y en X32 antes de tocarla.
-   - **Detector de acople:**
-     - hoy marca lo que ve el RTA, o sea el main;
-     - con el arreglo marcaría en el canal implicado;
-     - sumar también un detector sobre el MAIN LR (en su EQ o en MEDIDORES) que diga en qué frecuencia está el acople aunque no se sepa de qué canal viene.
-   - En el título del EQ, mostrar de qué es el espectro ("RTA: CH 01" / "RTA: MAIN"), para que no haya dudas.
-2. **COPIAR / PEGAR seteos** (pedido del 11/11/2026: "copiar seteos, envíos enteros, buses enteros, EQs, todo lo que quiera").
-   - **Qué se copia** (cada uno por separado o todo junto):
-     - EQ completo;
-     - gate;
-     - compresor;
-     - todos los envíos de un canal (niveles, ON y paneo de cada bus y FX);
-     - CONFIG (color, low cut, phase, asignaciones a DCA y mute groups);
-     - el canal entero;
-     - un bus entero (EQ, compresor, fader, mute).
-   - **No se copia nunca solo:** el nombre, la entrada física, el GAIN ni el 48V. Copiar el 48V puede romper un micrófono; si alguna vez se quiere, que sea un tilde aparte, apagado por defecto.
-   - **Dónde:**
-     - un botón COPIAR en cada pestaña del detalle (CONFIG, GATE, DYN, EQ, ENVÍOS), que copia esa sección;
-     - en la cabecera del canal, COPIAR CANAL / COPIAR BUS (todo).
-     - Al copiar aparece un chip "📋 EQ de CH 01" en la barra de arriba, hasta que se pegue o se borre.
-   - **Pegar:**
-     - PEGAR en la misma pestaña de otro canal o bus del mismo tipo;
-     - "PEGAR EN VARIOS…": elegir varios destinos de una vez, por ejemplo el EQ de la voz a los dos micrófonos.
-     - Antes de pegar, confirmación: "Pegar EQ de CH 01 en CH 02 y CH 03".
-   - **Envíos completos:**
-     - copiar los envíos de un canal y pegarlos en otro;
-     - "copiar un bus entero": todo lo que cada canal manda a ese bus, pegado en otro bus (por ejemplo, armar el monitor de Palmito igual al de Garko y después retocar).
-   - **Paridad:** misma lista de direcciones en Model.kt y Model.swift (una tabla por sección, usando las mismas direcciones que ya usan los paneles y las escenas).
-   - **Revisar en celular:** los botones COPIAR/PEGAR no pueden tapar nada en la cabecera chica.
-3. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+1. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
    - `android/airmix-debug.keystore` está en el historial público.
    - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
-   - Joaquín decide cuándo.
+   - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
 
 ## Futuro (Joaquín dijo "me interesa en el futuro", 01/11/2026; no hacer hasta que lo pida)
 1. **Medidor de reducción del compresor y del gate** en cada canal: cuánto está comprimiendo o cerrando.
 2. **Salidas físicas:** qué sale por AUX OUT 1/2 de la XR12 y desde qué punto.
 3. **Presets de canal:** guardar la configuración de un canal (EQ, compresor, gate…) y cargarla en otro.
 4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
+
+## Para probar en la XR12 (0.5.3)
+- **RTA del canal:** al abrir el EQ de un canal, el espectro tiene que ser el de ese canal ("RTA: CH 01" arriba). Al salir, la consola vuelve a mostrar el RTA de antes.
+  - Dirección usada: `/-stat/rta/source` (X Air, 0-32 = Ch01..16, Aux, Fx1..4, Bus1..6, Send1..4, LR, MON).
+  - En X32 no se toca.
+- **Acople:** que ahora marque en el canal que acopla, y en el EQ del MAIN el acople general.
+- **COPIAR / PEGAR:**
+  - copiar un EQ y pegarlo en otro canal;
+  - copiar un canal entero;
+  - "ENVÍOS AL BUS" de un bus a otro (monitor de Garko → Palmito).
+  - Confirmar que no toca nombre, entrada, GAIN ni 48V.
 
 ## Para probar en la XR12 (0.5.0)
 - **Cargar escena:** que los links y el 48V queden como la escena (y apagados si no los trae). Si el 48V sigue sin cambiar, mandar las dos .scn.
@@ -81,6 +57,16 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 - **LINK STEREO:** probar que la consola copia fader, mute y EQ al par, y que el link hecho desde la consola o desde otra app aparece solo en AirMix.
 - **Escenas .scn:** el cargador no aplica el bloque `config`, así que el link de canales puede no restaurarse al cargar una escena.
 - **Chip SOLO:** usa `/-stat/solo`. Si la XR12 no lo manda, el chip no aparece nunca (CLR SOLO sigue en MEDIDORES igual).
+
+## Hecho en 0.5.3 (12/11/2026)
+- **COPIAR / PEGAR seteos** (Clipboard.kt / Clipboard.swift):
+  - botón 📋 en el detalle: copiar la sección visible o la tira entera;
+  - en buses, también "ENVÍOS AL BUS";
+  - pegar acá o en varios, con confirmación;
+  - chip 📋 arriba.
+  - Usa las tablas de las escenas (nodeList + fieldsFor).
+  - Nunca: nombre, insrc/rtnsrc/source, trim/rtntrim/rtnsw, 48V.
+- **RTA con la fuente de la tira abierta** (X Air `/-stat/rta/source`), con el título "RTA: …" y la fuente de antes restaurada al salir. El detector de acople queda por canal y también en el MAIN.
 
 ## Hecho en 0.5.2 (09/11/2026)
 - **Aviso de actualización:**
