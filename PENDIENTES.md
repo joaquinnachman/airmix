@@ -17,13 +17,23 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 ## Decidido: NO hacer
 - Deshacer (descartado el 31/10/2026).
 - Ideas del 31/10/2026 no elegidas: fader fino, ayuda con la ganancia, reloj por tema, notas por canal, botones de volumen de la tablet, ficha técnica de la escena, aviso de batería.
+- Del 12/11/2026, no elegidas: escena por tema, memorias A/B/C/D, aviso grande de envíos, ring out guiado, registro del show, plantilla GyP, modo escenario oscuro, segunda pantalla, prueba de línea paso a paso.
 - Del 01/11/2026, no elegidas: automix, PRE/POST de envíos, safes al cargar escenas, GEQ en buses/main, auriculares/solo.
 - Respaldo antes de cargar escena, mute groups, vista "mi monitor" para el dúo, medidor grande del MAIN: propuestos el 31/10/2026, Joaquín no los eligió.
 - **Compatibilidad con otras marcas** (Soundcraft, Yamaha, Allen & Heath, etc.) ni un clon "Bis". Joaquín lo descartó el 22/10/2026: es demasiado trabajo. No volver a proponerlo.
 
 ## Próxima versión
 
-1. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+1. **Proteger el fader del MAIN LR** (elegida el 12/11/2026, idea 8 de la tanda de mejoras).
+   - Que un roce no suba ni baje todo el PA. Igual que el MUTE del main: hay que mantener apretado para moverlo.
+   - Al tocar el fader del MAIN LR, durante ~0,6 s no se mueve; mientras tanto se ve una barrita que se llena.
+   - Una vez "agarrado", se mueve normal mientras no se suelte el dedo. Al soltar, queda protegido de nuevo.
+   - Vale en MEZCLA y en el detalle del MAIN.
+   - También con SENDS ON FADER, si la tira MAIN muestra el fader del main.
+   - Los demás faders (canales, buses) siguen como siempre.
+   - Doble toque en el fader del main: no hace nada (que no lo lleve a 0 dB de golpe).
+   - Android (FaderView/stripView) e iOS (FaderView/StripView). Revisar en celular.
+2. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
    - `android/airmix-debug.keystore` está en el historial público.
    - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
    - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
