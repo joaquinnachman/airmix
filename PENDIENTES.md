@@ -33,17 +33,15 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
    - Los demás faders (canales, buses) siguen como siempre.
    - Doble toque en el fader del main: no hace nada (que no lo lleve a 0 dB de golpe).
    - Android (FaderView/stripView) e iOS (FaderView/StripView). Revisar en celular.
-2. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
-   - `android/airmix-debug.keystore` está en el historial público.
-   - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
-   - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
-
-## Futuro (Joaquín dijo "me interesa en el futuro", 01/11/2026; no hacer hasta que lo pida)
-1. **Medidor de reducción del compresor y del gate** en cada canal: cuánto está comprimiendo o cerrando.
-2. **Salidas físicas:** qué sale por AUX OUT 1/2 de la XR12 y desde qué punto.
-3. **Presets de canal:** guardar la configuración de un canal (EQ, compresor, gate…) y cargarla en otro.
-4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
-5. **SALA: mapa de riesgo de acople, sin conectar nada** (idea del 12-13/11/2026; Joaquín: "todavía no hagamos, sigamos puliendo").
+2. **SALA: mapa de riesgo de acople, sin conectar nada** (idea del 12-13/11/2026; pasada a próxima versión el 13/11: "me gustaría que sea un apartado en la app").
+   - **Apartado propio:** pestaña "SALA" en la barra de arriba, junto a MEZCLA / EFECTOS / MEDIDORES / ESCENAS. En celular puede ir con ícono o texto corto; revisar que la barra entre.
+   - **Flujo en pantalla:**
+     1. elegir qué canales son micrófonos (tildados por defecto los que tienen señal o 48V);
+     2. elegir la salida a probar: MAIN o un bus de monitor;
+     3. tocar MEDIR;
+     4. ver resultado y alertas.
+   - Avisar en pantalla que se usa a volumen moderado y que los micrófonos tienen que estar en su lugar de show.
+   - Al terminar, devolver todo como estaba: la fuente del RTA y el +3 dB de prueba.
    - **Requisito duro:** cero cables o entradas extra; solo los micrófonos que ya están conectados para el show.
    - **Fuente de ruido rosa:**
      - si la XR12 tiene generador propio, usar ese (verificar);
@@ -57,7 +55,16 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
      - también marcar los picos fuertes sobre el promedio.
    - **Resultado:** alerta con la lista "riesgo alto en 2.5 kHz (sobre todo en VOZ GARKO)", con "✂ CORTAR" sugerido en el main o el monitor (con OK).
    - **Opcional:** guardar por lugar (nombre de la sala) para la próxima vez.
+3. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+   - `android/airmix-debug.keystore` está en el historial público.
+   - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
+   - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
 
+## Futuro (Joaquín dijo "me interesa en el futuro", 01/11/2026; no hacer hasta que lo pida)
+1. **Medidor de reducción del compresor y del gate** en cada canal: cuánto está comprimiendo o cerrando.
+2. **Salidas físicas:** qué sale por AUX OUT 1/2 de la XR12 y desde qué punto.
+3. **Presets de canal:** guardar la configuración de un canal (EQ, compresor, gate…) y cargarla en otro.
+4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
 ## Para probar en la XR12 (0.5.3)
 - **RTA del canal:** al abrir el EQ de un canal, el espectro tiene que ser el de ese canal ("RTA: CH 01" arriba). Al salir, la consola vuelve a mostrar el RTA de antes.
   - Dirección usada: `/-stat/rta/source` (X Air, 0-32 = Ch01..16, Aux, Fx1..4, Bus1..6, Send1..4, LR, MON).
