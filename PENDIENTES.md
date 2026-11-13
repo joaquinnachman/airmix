@@ -43,6 +43,20 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 2. **Salidas físicas:** qué sale por AUX OUT 1/2 de la XR12 y desde qué punto.
 3. **Presets de canal:** guardar la configuración de un canal (EQ, compresor, gate…) y cargarla en otro.
 4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
+5. **SALA: mapa de riesgo de acople, sin conectar nada** (idea del 12-13/11/2026; Joaquín: "todavía no hagamos, sigamos puliendo").
+   - **Requisito duro:** cero cables o entradas extra; solo los micrófonos que ya están conectados para el show.
+   - **Fuente de ruido rosa:**
+     - si la XR12 tiene generador propio, usar ese (verificar);
+     - si no, el parlante de la tablet, apoyada cerca de los micrófonos.
+   - **Medición:**
+     - la app recorre la fuente del RTA (`/-stat/rta/source`) por cada canal de micrófono, ~2-3 s cada uno;
+     - promedia todos los micrófonos y también guarda el peor de cada uno.
+   - **Predicción sin hacerlo acoplar:**
+     - medir dos veces, al nivel actual y con el main/monitor +3 dB;
+     - las bandas que crecen bastante más que 3 dB son las que están cerca de acoplar;
+     - también marcar los picos fuertes sobre el promedio.
+   - **Resultado:** alerta con la lista "riesgo alto en 2.5 kHz (sobre todo en VOZ GARKO)", con "✂ CORTAR" sugerido en el main o el monitor (con OK).
+   - **Opcional:** guardar por lugar (nombre de la sala) para la próxima vez.
 
 ## Para probar en la XR12 (0.5.3)
 - **RTA del canal:** al abrir el EQ de un canal, el espectro tiene que ser el de ese canal ("RTA: CH 01" arriba). Al salir, la consola vuelve a mostrar el RTA de antes.
