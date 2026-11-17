@@ -24,9 +24,21 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 
 ## Próxima versión
 
-1. **SALA: guardar por lugar** (lo opcional del ítem SALA, quedó para después de 0.5.5).
+1. **SALA: el ruido rosa tiene que salir de la consola al MAIN LR, no del parlante de la tablet** (Joaquín, 17/11/2026).
+   - Joaquín: "la generación de ruido rosa sea desde la app hacia el main LR, es una función que tienen otras apps"; el parlante de la tablet "filtra y es malísimo".
+   - Después él mide con alguno de los micrófonos.
+   - **Límite técnico:** por wifi (OSC) la app solo manda órdenes, no audio. "Mandarlo desde la app" = prender el generador interno de la consola (oscilador / ruido rosa) por OSC y rutearlo al MAIN LR.
+     - Así lo hacen las otras apps; en X32/M32 existe (`/-stat/osc/on` + `/config/osc/...`).
+   - **Bloqueado hasta confirmar** que la XR12 tiene generador y cuál es su dirección OSC:
+     - Joaquín va a fijarse en X-Air Edit / Mixing Station / MX Mix si tiene oscilador o ruido rosa, y en qué app lo vio.
+     - **No mandar direcciones sin verificar.**
+   - **Si existe:**
+     - en SALA, botón RUIDO ROSA → MAIN LR, con nivel (arranca bajo, por ejemplo -30 dB) y apagado automático al salir de SALA, al perder conexión o a los 60 s;
+     - la medición usa ese ruido en vez del parlante, y el parlante de la tablet se saca.
+   - **Si no existe:** avisarle a Joaquín con las alternativas, sin implementar nada.
+2. **SALA: guardar por lugar** (lo opcional del ítem SALA, quedó para después de 0.5.5).
    - Guardar el resultado con el nombre de la sala para la próxima vez.
-2. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+3. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
    - `android/airmix-debug.keystore` está en el historial público.
    - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
    - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
