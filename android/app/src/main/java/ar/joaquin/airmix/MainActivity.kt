@@ -25,7 +25,7 @@ import android.widget.TextView
 import android.widget.Toast
 
 class MainActivity : Activity() {
-    enum class Tab(val label: String) { MIX("MEZCLA"), FX("EFECTOS"), METERS("MEDIDORES"), SCENES("ESCENAS") }
+    enum class Tab(val label: String) { MIX("MEZCLA"), FX("EFECTOS"), METERS("MEDIDORES"), ROOM("SALA"), SCENES("ESCENAS") }
 
     companion object {
         private const val REQ_SAVE = 41
@@ -110,6 +110,9 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        // SALA: si la app pasa a segundo plano, nada queda sonando ni con la salida +3 dB.
+        Room.cancel("Cancelada: la app pasó a segundo plano. Todo volvió como estaba.")
+        PinkNoise.stop()
         ticking = false
         handler.removeCallbacks(tick)
         super.onPause()
@@ -192,6 +195,7 @@ class MainActivity : Activity() {
             showLostBanner(!isConn && everConnected)
             if (isConn) everConnected = true
         }
+        if (Room.running) Room.tick(android.os.SystemClock.uptimeMillis())
         if (connected) {
             Clip.scan(c.meters, android.os.SystemClock.uptimeMillis())
             for (v in App.meterViews) v.invalidate()
@@ -315,12 +319,13 @@ class MainActivity : Activity() {
         top.addView(View(this), lp(dp(sz(12, 4)), 1))
         for (t in Tab.values()) {
             val b = Btn(this, t.label, BtnStyle.TAB, sz(16f, 12f))
+            b.fitOneLine(8)
             b.setOnClickListener {
                 tab = t
                 render()
             }
             tabBtns[t] = b
-            top.addView(b, lp(dp(sz(124, 78)), dp(sz(40, 34))).m(r = dp(sz(6, 3))))
+            top.addView(b, lp(dp(sz(112, 70)), dp(sz(40, 34))).m(r = dp(sz(6, 3))))
         }
         top.addView(View(this), lp(0, 1, 1f))
         // Aviso de solo prendido (CLR SOLO ahora vive en MEDIDORES): tocarlo apaga todos los solos.
@@ -460,6 +465,12 @@ class MainActivity : Activity() {
                 for ((n, t) in listOf(0, 10, 13, 21).withIndex()) App.store.incoming("/fx/${n + 1}/type", t)
                 for (n in 1..4) for (k in 1..12) App.store.incoming("/fx/$n/par/${Fmt.two(k)}", (k * 7 % 10) / 10f)
                 tab = Tab.FX
+                render()
+            }
+            "sala" -> {
+                bigTimer.visibility = View.GONE
+                Room.demo()
+                tab = Tab.ROOM
                 render()
             }
             "corte" -> {
@@ -610,6 +621,7 @@ class MainActivity : Activity() {
             }
             Tab.FX -> Rack.build(this)
             Tab.METERS -> buildMeters()
+            Tab.ROOM -> RoomScreen.build(this)
             Tab.SCENES -> buildScenes()
         }
         content.addView(v, FrameLayout.LayoutParams(MATCH, MATCH))

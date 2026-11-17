@@ -21,6 +21,34 @@ class FaderView(ctx: Context) : View(ctx) {
     var fillColor = C.FILL
     var onUserChange: ((Float) -> Unit)? = null
 
+    /**
+     * Fader protegido (MAIN LR): al tocarlo no se mueve durante GUARD_MS (se llena una barrita);
+     * recién ahí queda "agarrado" hasta soltar. Sin doble toque a 0 dB. Igual que iOS.
+     */
+    var guarded = false
+    private var armed = false
+    private var holding = false
+    private var holdStart = 0L
+    private var holdProgress = 0f
+    private val holdTick = object : Runnable {
+        override fun run() {
+            if (!holding) return
+            holdProgress = ((android.os.SystemClock.uptimeMillis() - holdStart) / GUARD_MS.toFloat()).coerceIn(0f, 1f)
+            if (holdProgress >= 1f) {
+                holding = false
+                armed = true
+                lastY = pendingY
+                performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            } else postOnAnimation(this)
+            invalidate()
+        }
+    }
+    private var pendingY = 0f
+
+    companion object {
+        const val GUARD_MS = 600L
+    }
+
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val r = RectF()
     private var lastY = 0f
@@ -32,6 +60,7 @@ class FaderView(ctx: Context) : View(ctx) {
     private val drawnY = FloatArray(9)
     private val gd = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDoubleTap(e: MotionEvent): Boolean {
+            if (guarded) return true
             setValue(0.75f)
             onUserChange?.invoke(value)
             return true
@@ -107,6 +136,17 @@ class FaderView(ctx: Context) : View(ctx) {
         c.drawRoundRect(r, dpf(7f), dpf(7f), p)
         p.color = fillColor
         c.drawRect(cx - hw + dpf(6f), y - dpf(1.5f), cx + hw - dpf(6f), y + dpf(1.5f), p)
+        // Fader protegido: barrita que se llena mientras se mantiene apretado (arriba del cap).
+        if (guarded && holding) {
+            val above = y - ch / 2f - dpf(9f)
+            val by = if (above >= 0f) above else y + ch / 2f + dpf(4f)
+            p.color = C.METER_BG
+            r.set(cx - hw, by, cx + hw, by + dpf(5f))
+            c.drawRoundRect(r, dpf(2.5f), dpf(2.5f), p)
+            p.color = Color.WHITE
+            r.set(cx - hw, by, cx - hw + 2f * hw * holdProgress, by + dpf(5f))
+            c.drawRoundRect(r, dpf(2.5f), dpf(2.5f), p)
+        }
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
@@ -114,11 +154,23 @@ class FaderView(ctx: Context) : View(ctx) {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 lastY = e.y
-                dragging = true
-                invalidate()
+                pendingY = e.y
                 parent?.requestDisallowInterceptTouchEvent(true)
+                if (guarded) {
+                    armed = false
+                    holding = true
+                    holdStart = android.os.SystemClock.uptimeMillis()
+                    holdProgress = 0f
+                    postOnAnimation(holdTick)
+                } else dragging = true
+                invalidate()
             }
             MotionEvent.ACTION_MOVE -> {
+                if (guarded && !armed) {
+                    pendingY = e.y
+                    return true
+                }
+                dragging = true
                 val dv = (lastY - e.y) / maxOf(travel(), 1f)
                 lastY = e.y
                 val nv = (value + dv).coerceIn(0f, 1f)
@@ -130,6 +182,9 @@ class FaderView(ctx: Context) : View(ctx) {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 dragging = false
+                holding = false
+                armed = false
+                holdProgress = 0f
                 invalidate()
             }
         }

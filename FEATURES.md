@@ -50,3 +50,5 @@
 | Aviso de actualización desde GitHub Releases (Android: baja e instala; iOS: avisa y abre la página) | ✅ | ✅ |
 | COPIAR / PEGAR seteos (sección, tira entera, envíos al bus; pegar en varios) — Clipboard.kt / Clipboard.swift | ✅ | ✅ |
 | RTA con la fuente de la tira abierta (X Air `/-stat/rta/source`; X32 sin cambios) | ✅ | ✅ |
+| Fader del MAIN LR protegido: mantener ~0,6 s para moverlo (barrita), sin doble toque a 0 dB | ✅ | ✅ |
+| SALA: mapa de riesgo de acople sin conectar nada (RTA por micrófono, pasada normal y +3 dB, ruido rosa del parlante, ✂ CORTAR en MAIN/monitor) — Room.kt + RoomScreen.kt / Room.swift | ✅ | ✅ (solo X Air) |

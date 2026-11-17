@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Tab: String, CaseIterable {
-    case mix = "MEZCLA", fx = "EFECTOS", meters = "MEDIDORES", scenes = "ESCENAS"
+    case mix = "MEZCLA", fx = "EFECTOS", meters = "MEDIDORES", room = "SALA", scenes = "ESCENAS"
 }
 
 struct ContentView: View {
@@ -134,7 +134,7 @@ struct ContentView: View {
             Spacer().frame(width: small ? 2 : 18)
             ForEach(Tab.allCases, id: \.self) { t in
                 Pill(text: t.rawValue, active: tab == t, style: .tab, size: small ? 11 : 15) { tab = t }
-                    .frame(width: small ? 76 : 120, height: small ? 32 : 38)
+                    .frame(width: small ? 68 : 112, height: small ? 32 : 38)
                     .allowsHitTesting(!locked)
             }
             Spacer(minLength: 0)
@@ -246,6 +246,7 @@ struct ContentView: View {
                 .padding(.horizontal, 16).padding(.top, 6)
                 if lineCheck { LineCheckView() } else { AllMetersView() }
             }
+        case .room: RoomView(small: small)
         case .scenes: ScenesView()
         }
     }
@@ -378,6 +379,9 @@ struct ContentView: View {
             for (n, t) in [0, 10, 13, 21].enumerated() { Store.shared.incoming("/fx/\(n + 1)/type", .i(Int32(t))) }
             for n in 1...4 { for k in 1...12 { Store.shared.incoming("/fx/\(n)/par/\(Fmt.two(k))", .f(Float(k * 7 % 10) / 10)) } }
             tab = .fx
+        case "sala":
+            Room.shared.demo()
+            tab = .room
         case "corte":
             core.lost = true
             locked = true

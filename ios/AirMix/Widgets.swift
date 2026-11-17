@@ -6,13 +6,23 @@ struct FaderView: View {
     let fill: Color
     @State private var start: Float?
     @State private var lastTap = Date.distantPast
+    /// Fader protegido (MAIN LR): al tocarlo no se mueve durante guardTime (se llena una barrita);
+    /// recién ahí queda "agarrado" hasta soltar. Sin doble toque a 0 dB. Igual que Android.
+    var guarded = false
+    @State private var touchAt: Date?
+    @State private var armed = false
+    @State private var armOffset: CGFloat = 0
+    @State private var holdProgress: CGFloat = 0
+    @State private var holdToken = 0
+    static let guardTime = 0.6
 
     private static let marks: [(Float, String)] = [(10, "+10"), (5, "+5"), (0, "0"), (-5, "-5"), (-10, "-10"), (-20, "-20"), (-30, "-30"), (-40, "-40"), (-60, "-60")]
     private static let labelOrder = [2, 8, 0, 5, 4, 7, 1, 6, 3]
 
-    init(addr: String, fill: Color) {
+    init(addr: String, fill: Color, guarded: Bool = false) {
         _p = ObservedObject(wrappedValue: Store.shared.param(addr))
         self.fill = fill
+        self.guarded = guarded
     }
 
     var body: some View {
@@ -50,16 +60,56 @@ struct FaderView: View {
                 ctx.fill(Path(roundedRect: CGRect(x: cx - hw, y: y, width: hw * 2, height: capH / 2), cornerRadius: 7), with: .color(C.capShade))
                 ctx.fill(Path(CGRect(x: cx - hw + 6, y: y - 1.5, width: hw * 2 - 12, height: 3)), with: .color(fill))
             }
+            .overlay(alignment: .topLeading) {
+                // Fader protegido: barrita que se llena mientras se mantiene apretado (arriba del cap).
+                if guarded && touchAt != nil && !armed {
+                    let cx = geo.size.width * 0.62
+                    let hw = min(24, geo.size.width * 0.3)
+                    let y = top + travel - CGFloat(value) * travel
+                    let above = y - capH / 2 - 9
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(C.meterBg)
+                        Capsule().fill(Color.white).frame(width: hw * 2 * holdProgress)
+                    }
+                    .frame(width: hw * 2, height: 5)
+                    .offset(x: cx - hw, y: above >= 0 ? above : y + capH / 2 + 4)
+                    .allowsHitTesting(false)
+                }
+            }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { g in
-                        if start == nil { start = value }
-                        let nv = min(max((start ?? 0) - Float(g.translation.height / travel), 0), 1)
+                        if guarded && !armed {
+                            if touchAt == nil {
+                                touchAt = Date()
+                                holdProgress = 0
+                                holdToken += 1
+                                let token = holdToken
+                                withAnimation(.linear(duration: FaderView.guardTime)) { holdProgress = 1 }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + FaderView.guardTime) {
+                                    if holdToken == token && touchAt != nil && !armed {
+                                        armed = true
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    }
+                                }
+                            }
+                            return
+                        }
+                        if start == nil {
+                            start = value
+                            armOffset = g.translation.height
+                        }
+                        let nv = min(max((start ?? 0) - Float((g.translation.height - armOffset) / travel), 0), 1)
                         if nv != value { Store.shared.set(p.address, .f(nv)) }
                     }
                     .onEnded { g in
-                        if abs(g.translation.height) < 4 {
+                        let wasGuarded = guarded
+                        touchAt = nil
+                        armed = false
+                        holdProgress = 0
+                        holdToken += 1
+                        if !wasGuarded && abs(g.translation.height) < 4 {
                             if Date().timeIntervalSince(lastTap) < 0.35 {
                                 Store.shared.set(p.address, .f(0.75))
                                 lastTap = .distantPast

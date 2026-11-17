@@ -50,6 +50,8 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     val faderRow = row()
     val fader = FaderView(this)
     fader.fillColor = if (sendAddr != null) C.SENDS else Sector.of(s.kind)
+    // MAIN LR: el fader se protege de roces (hay que mantenerlo apretado ~0,6 s para moverlo).
+    fader.guarded = s.kind == Kind.LR && faderAddr == s.faderAddr
     fader.bind(faderAddr) { v ->
         val f = v.asF()
         fader.setValue(f)
@@ -584,7 +586,7 @@ object Panels {
      * si no, usa la banda libre (PEQ/VEQ en 0 dB) más cercana: PEQ, -6 dB, Q 8 (angosto).
      * Devuelve la banda usada o -1 si no hay ninguna libre.
      */
-    private fun cutFeedback(p: String, bands: Int, hz: Float): Int {
+    fun cutFeedback(p: String, bands: Int, hz: Float): Int {
         val st = App.store
         val target = Fmt.logInv(20f, 20000f, hz).coerceIn(0f, 1f)
         val near = 1f / 18f // 1/6 de octava en la escala de 10 octavas

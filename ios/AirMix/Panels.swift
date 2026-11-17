@@ -39,7 +39,8 @@ struct StripView: View {
             }
             .padding(.horizontal, k ? 4 : 6)
             HStack(spacing: 2) {
-                FaderView(addr: faderAddr, fill: send != nil ? sendColor : Sector.of(strip.kind))
+                // MAIN LR: el fader se protege de roces (hay que mantenerlo apretado ~0,6 s para moverlo).
+                FaderView(addr: faderAddr, fill: send != nil ? sendColor : Sector.of(strip.kind), guarded: strip.kind == .lr && faderAddr == strip.faderAddr)
                 if strip.meterL >= 0 {
                     MeterView(l: strip.meterL, r: strip.meterR)
                         .frame(width: strip.meterR >= 0 ? 12 : 8)

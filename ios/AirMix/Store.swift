@@ -201,6 +201,7 @@ final class Core: ObservableObject {
             let now = linkedPairs()
             if now != links { links = now }
         }
+        if Room.shared.running { Room.shared.tick(Date().timeIntervalSince1970) }
         let c = client.isConnected()
         if c { Clip.scan(client.meters, now: Date().timeIntervalSince1970) }
         if c {
