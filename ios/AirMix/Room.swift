@@ -256,8 +256,13 @@ final class Room: ObservableObject {
 
     /// Para las capturas: un resultado de ejemplo.
     func demo() {
-        var score = (0..<Room.bins).map { Float(0.4 * sin(Double($0) / 5)) }
-        var spec = (0..<Room.bins).map { Float(-38 - Double($0) * 0.12 + 3 * sin(Double($0) / 7)) }
+        var score = (0..<Room.bins).map { (i: Int) -> Float in Float(0.4 * sin(Double(i) / 5)) }
+        var spec = [Float](repeating: 0, count: Room.bins)
+        for i in 0..<Room.bins {
+            let d = Double(i)
+            let wave: Double = 3 * sin(d / 7)
+            spec[i] = Float(-38 - d * 0.12 + wave)
+        }
         score[73] = 5.6; score[72] = 3.9; score[74] = 3.5
         score[55] = 2.7; score[56] = 2.1
         spec[38] += 12
