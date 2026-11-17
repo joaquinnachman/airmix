@@ -24,38 +24,9 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 
 ## Próxima versión
 
-1. **Proteger el fader del MAIN LR** (elegida el 12/11/2026, idea 8 de la tanda de mejoras).
-   - Que un roce no suba ni baje todo el PA. Igual que el MUTE del main: hay que mantener apretado para moverlo.
-   - Al tocar el fader del MAIN LR, durante ~0,6 s no se mueve; mientras tanto se ve una barrita que se llena.
-   - Una vez "agarrado", se mueve normal mientras no se suelte el dedo. Al soltar, queda protegido de nuevo.
-   - Vale en MEZCLA y en el detalle del MAIN.
-   - También con SENDS ON FADER, si la tira MAIN muestra el fader del main.
-   - Los demás faders (canales, buses) siguen como siempre.
-   - Doble toque en el fader del main: no hace nada (que no lo lleve a 0 dB de golpe).
-   - Android (FaderView/stripView) e iOS (FaderView/StripView). Revisar en celular.
-2. **SALA: mapa de riesgo de acople, sin conectar nada** (idea del 12-13/11/2026; pasada a próxima versión el 13/11: "me gustaría que sea un apartado en la app").
-   - **Apartado propio:** pestaña "SALA" en la barra de arriba, junto a MEZCLA / EFECTOS / MEDIDORES / ESCENAS. En celular puede ir con ícono o texto corto; revisar que la barra entre.
-   - **Flujo en pantalla:**
-     1. elegir qué canales son micrófonos (tildados por defecto los que tienen señal o 48V);
-     2. elegir la salida a probar: MAIN o un bus de monitor;
-     3. tocar MEDIR;
-     4. ver resultado y alertas.
-   - Avisar en pantalla que se usa a volumen moderado y que los micrófonos tienen que estar en su lugar de show.
-   - Al terminar, devolver todo como estaba: la fuente del RTA y el +3 dB de prueba.
-   - **Requisito duro:** cero cables o entradas extra; solo los micrófonos que ya están conectados para el show.
-   - **Fuente de ruido rosa:**
-     - si la XR12 tiene generador propio, usar ese (verificar);
-     - si no, el parlante de la tablet, apoyada cerca de los micrófonos.
-   - **Medición:**
-     - la app recorre la fuente del RTA (`/-stat/rta/source`) por cada canal de micrófono, ~2-3 s cada uno;
-     - promedia todos los micrófonos y también guarda el peor de cada uno.
-   - **Predicción sin hacerlo acoplar:**
-     - medir dos veces, al nivel actual y con el main/monitor +3 dB;
-     - las bandas que crecen bastante más que 3 dB son las que están cerca de acoplar;
-     - también marcar los picos fuertes sobre el promedio.
-   - **Resultado:** alerta con la lista "riesgo alto en 2.5 kHz (sobre todo en VOZ GARKO)", con "✂ CORTAR" sugerido en el main o el monitor (con OK).
-   - **Opcional:** guardar por lugar (nombre de la sala) para la próxima vez.
-3. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+1. **SALA: guardar por lugar** (lo opcional del ítem SALA, quedó para después de 0.5.5).
+   - Guardar el resultado con el nombre de la sala para la próxima vez.
+2. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
    - `android/airmix-debug.keystore` está en el historial público.
    - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
    - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
@@ -65,6 +36,15 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 2. **Salidas físicas:** qué sale por AUX OUT 1/2 de la XR12 y desde qué punto.
 3. **Presets de canal:** guardar la configuración de un canal (EQ, compresor, gate…) y cargarla en otro.
 4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
+## Para probar en la XR12 (0.5.5)
+- **Fader del MAIN:** que un roce no lo mueva, que al mantener ~0,6 s se agarre y se mueva sin saltos, y que el doble toque no haga nada.
+- **SALA** (a volumen moderado, micrófonos en su lugar, tablet apoyada cerca):
+  - que el ruido rosa de la tablet se escuche en el RTA de cada micrófono (si no, subir el volumen de la tablet);
+  - que durante la medición el MAIN (o el monitor) suba 3 dB y al terminar vuelva exacto a donde estaba;
+  - que después la consola muestre el RTA como antes;
+  - comparar las alertas con lo que acopla de verdad y ajustar los umbrales (hoy: medio 2 dB, ALTO 4 dB, corte de seguridad 12 dB);
+  - verificar si la XR12 tiene generador de ruido propio (si lo tiene, se puede usar en vez del parlante).
+
 ## Para probar en la XR12 (0.5.3)
 - **RTA del canal:** al abrir el EQ de un canal, el espectro tiene que ser el de ese canal ("RTA: CH 01" arriba). Al salir, la consola vuelve a mostrar el RTA de antes.
   - Dirección usada: `/-stat/rta/source` (X Air, 0-32 = Ch01..16, Aux, Fx1..4, Bus1..6, Send1..4, LR, MON).
@@ -88,6 +68,23 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 - **LINK STEREO:** probar que la consola copia fader, mute y EQ al par, y que el link hecho desde la consola o desde otra app aparece solo en AirMix.
 - **Escenas .scn:** el cargador no aplica el bloque `config`, así que el link de canales puede no restaurarse al cargar una escena.
 - **Chip SOLO:** usa `/-stat/solo`. Si la XR12 no lo manda, el chip no aparece nunca (CLR SOLO sigue en MEDIDORES igual).
+
+## Hecho en 0.5.5 (17/11/2026)
+- **Fader del MAIN LR protegido** (FaderView.guarded en Android e iOS):
+  - al tocarlo no se mueve durante 0,6 s (barrita blanca arriba del cap); después se mueve normal hasta soltar;
+  - doble toque: no hace nada;
+  - MEZCLA, detalle del MAIN y SENDS ON FADER (la tira MAIN siempre muestra el fader del main). Los demás faders, igual.
+- **SALA: mapa de riesgo de acople, sin conectar nada** (Room.kt + RoomScreen.kt / Room.swift):
+  - pestaña SALA entre MEDIDORES y ESCENAS (en celular las pestañas se angostaron para que entre la barra);
+  - pasos: micrófonos (tildados solos los que tienen señal o 48V) → salida (MAIN o bus) → ruido rosa → MEDIR;
+  - ruido rosa por el parlante de la tablet (filtro de Paul Kellet, fundido de 0,3 s), con botón PROBAR RUIDO;
+  - por cada micrófono: fuente del RTA en ese canal, 0,8 s de espera + 2,2 s de promedio; dos pasadas (nivel actual y salida +3 dB);
+  - riesgo = cuánto crece cada banda por encima de la mediana (medio ≥ 2 dB, ALTO ≥ 4 dB); también picos ≥ 10 dB sobre las vecinas; 60 Hz–12 kHz, hasta 5 alertas;
+  - seguridad: si en la pasada +3 dB una banda sube 12 dB y pasa -30 dB, corta la prueba al instante y lo marca como ALTO;
+  - ✂ CORTAR con OK, en el EQ de la salida medida (mismo corte que el detector: PEQ -6 dB, Q 8);
+  - al terminar, cancelar, salir de SALA, perder la conexión o mandar la app a segundo plano: salida, fuente del RTA y ruido vuelven como estaban;
+  - solo X Air (en X32 avisa).
+  - **A confirmar:** se usa el parlante de la tablet porque no está verificado que la XR12 tenga generador de ruido propio; no se manda ninguna dirección OSC sin verificar.
 
 ## Hecho en 0.5.3 (12/11/2026)
 - **COPIAR / PEGAR seteos** (Clipboard.kt / Clipboard.swift):
