@@ -368,7 +368,11 @@ object Scenes {
         val bus = scene.lines.firstOrNull { it.first == "config/buslink" }?.second ?: emptyList()
         for ((k, odd) in (1 until c.buses step 2).withIndex()) w.add("/config/buslink/$odd-${odd + 1}" to (onOff(bus.getOrNull(k)) ?: 0))
         val on = phantomOn(scene).toSet()
-        for (i in 1..headampCount()) w.add("/${headampPath(i)}/phantom" to if (i in on) 1 else 0)
+        for (i in 1..headampCount()) {
+            // X32: solo lo que la escena trae (puede haber stageboxes y condensadores: nunca apagar 48V "por las dudas").
+            if (c.isX32 && scene.lines.none { it.first == headampPath(i) }) continue
+            w.add("/${headampPath(i)}/phantom" to if (i in on) 1 else 0)
+        }
         return w
     }
 

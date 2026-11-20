@@ -322,16 +322,16 @@ object Panels {
             val phantomSlot = FrameLayout(ctx)
             val gainInfo = label("", 12f, C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL)
             var shownHa: String? = "?"
-            gainSlot.bind(s.sourceAddr) { v ->
-                val ha = s.headampFor(v.asI())
-                if (ha == shownHa) return@bind
+            val refreshHa: (Int) -> Unit = refresh@{ src ->
+                val ha = s.headampFor(src)
+                if (ha == shownHa) return@refresh
                 shownHa = ha
                 gainSlot.removeAllViews()
                 phantomSlot.removeAllViews()
                 if (ha == null) {
                     gainSlot.addView(label("SIN PREAMP\n(fuente sin ganancia)", 13f, C.TEXT_DIM).also { it.maxLines = 2 }, FrameLayout.LayoutParams(MATCH, MATCH))
                     gainInfo.text = ""
-                    return@bind
+                    return@refresh
                 }
                 gainSlot.addView(knob(Spec("GAIN", "$ha/gain", def = 12f / 72f) { Fmt.db(Fmt.lin(-12f, 60f, it)) }), FrameLayout.LayoutParams(MATCH, MATCH))
                 phantomSlot.addView(toggle("48V", "$ha/phantom", color = C.MUTE, sp = 17f), FrameLayout.LayoutParams(MATCH, MATCH))
@@ -345,6 +345,9 @@ object Panels {
                     }
                 }, 2500)
             }
+            gainSlot.bind(s.sourceAddr) { v -> refreshHa(v.asI()) }
+            // X32: el preamp también depende del ruteo de entradas (local / AES50).
+            if (isX32) for (ra in X32_IN_ROUTING) gainSlot.bind(ra) { App.store.get(s.sourceAddr)?.let { refreshHa(it.asI()) } }
             r3.addView(gainSlot, lp(dp(190), dp(80)))
             // X32 tiene TRIM digital por canal; en X Air la ganancia de entrada es solo el headamp.
             if (isX32) r3.addView(knob(Spec("TRIM", "$p/preamp/trim", def = 0.5f, bipolar = true) { Fmt.db(Fmt.lin(-18f, 18f, it)) }))

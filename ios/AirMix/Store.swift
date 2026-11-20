@@ -148,6 +148,8 @@ final class Core: ObservableObject {
         }
         // Fuente del RTA (X Air): se conoce de antemano para poder devolverla al salir del EQ.
         if !console.isX32 && !watched.contains(rtaSourceAddr) { watched.insert(rtaSourceAddr); _ = Store.shared.param(rtaSourceAddr) }
+        // X32: ruteo de entradas (para saber qué preamp alimenta cada canal).
+        if console.isX32 { for a in x32InRouting where !watched.contains(a) { watched.insert(a); _ = Store.shared.param(a) } }
         // Tipos de efecto cargados (para TAP tempo).
         for n in 1...max(1, TapTempo.slots()) {
             let a = "/fx/\(n)/type"

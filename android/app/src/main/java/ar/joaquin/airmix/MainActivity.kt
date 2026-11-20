@@ -244,6 +244,8 @@ class MainActivity : Activity() {
         }
         // Fuente del RTA (X Air): se conoce de antemano para poder devolverla al salir del EQ.
         if (!App.console.isX32 && watchedLinks.add(RTA_SOURCE)) App.store.observe(RTA_SOURCE) {}
+        // X32: ruteo de entradas (para saber qué preamp alimenta cada canal).
+        if (App.console.isX32) for (a in X32_IN_ROUTING) if (watchedLinks.add(a)) App.store.observe(a) {}
         // Tipos de efecto cargados (para TAP tempo).
         for (n in 1..TapTempo.slots()) {
             val a = "/fx/$n/type"

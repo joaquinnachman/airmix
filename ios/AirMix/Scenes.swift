@@ -346,7 +346,11 @@ final class Scenes: ObservableObject {
             w.append(("/config/buslink/\(odd)-\(odd + 1)", .i(Int32(onOff(k < bus.count ? bus[k] : nil) ?? 0))))
         }
         let on = Set(phantomOn(scene))
-        for i in 1...max(1, headampCount()) { w.append(("/\(headampPath(i))/phantom", .i(on.contains(i) ? 1 : 0))) }
+        for i in 1...max(1, headampCount()) {
+            // X32: solo lo que la escena trae (stageboxes / condensadores: nunca apagar 48V "por las dudas").
+            if c.isX32 && !scene.lines.contains(where: { $0.0 == headampPath(i) }) { continue }
+            w.append(("/\(headampPath(i))/phantom", .i(on.contains(i) ? 1 : 0)))
+        }
         return w
     }
 

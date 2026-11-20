@@ -1,3 +1,34 @@
+func sourceOptions() -> [String] {
+    let c = Core.shared.console
+    if !c.isX32 { return (1...max(1, c.channels)).map { "IN \(Fmt.two($0))" } }
+    // X32: source 0-64 = OFF, In01-32, Aux 1-6, USB L/R, FX 1L-4R, Bus 01-16.
+    var l = ["OFF"]
+    l += (1...32).map { "IN \(Fmt.two($0))" }
+    l += (1...6).map { "AUX \($0)" }
+    l += ["USB L", "USB R"]
+    for i in 1...4 { l += ["FX \(i)L", "FX \(i)R"] }
+    l += (1...16).map { "BUS \(Fmt.two($0))" }
+    return l
+}
+
+/// X32: ruteo de entradas, de a bloques de 8 (In01-08 … In25-32). Igual que Model.kt.
+let x32InRouting = ["/config/routing/IN/1-8", "/config/routing/IN/9-16", "/config/routing/IN/17-24", "/config/routing/IN/25-32"]
+
+/// X32: preamp de la fuente In01-32 según el ruteo (local 000-031, AES50 A 032-079, AES50 B 080-127, tarjeta sin preamp).
+func x32Headamp(_ src: Int) -> String? {
+    guard (1...32).contains(src) else { return nil }
+    let block = (src - 1) / 8
+    let r = Store.shared.int(x32InRouting[block], def: block)
+    let base: Int
+    switch r {
+    case 0...3: base = 8 * r
+    case 4...9: base = 32 + 8 * (r - 4)
+    case 10...15: base = 80 + 8 * (r - 10)
+    default: return nil
+    }
+    return "/headamp/" + String(format: "%03d", base + (src - 1) % 8)
+}
+
 import Foundation
 
 // Espejo de Model.kt (Android). Cualquier cambio de direcciones o índices va en los dos.
@@ -189,7 +220,7 @@ struct Strip: Equatable, Hashable {
     /// X Air insrc 0-15 -> /headamp/01..16; X32 source 1-128 -> /headamp/000..127; el resto no tiene preamp.
     func headampFor(_ src: Int) -> String? {
         guard kind == .ch else { return nil }
-        if c.isX32 { return (1...128).contains(src) ? "/headamp/" + String(format: "%03d", src - 1) : nil }
+        if c.isX32 { return x32Headamp(src) }
         return (0...15).contains(src) ? "/headamp/\(Fmt.two(src + 1))" : nil
     }
 

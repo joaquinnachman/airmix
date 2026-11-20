@@ -1,5 +1,11 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.5.6 (revisión para X32 / M32)
+- **ENTRADA en X32:** la lista ahora es la real de la X32 (OFF, In 01-32, Aux 1-6, USB L/R, FX 1L-4R, Bus 01-16). Antes mostraba nombres de AES50/tarjeta que no correspondían.
+- **GAIN y 48V en X32:** el preamp se calcula según el ruteo de entradas de la consola (local, AES50 A o B / stagebox). Antes, un canal con fuente Aux/USB/FX podía mostrar el preamp de un stagebox. Fuentes sin preamp (Aux, USB, FX, Bus, tarjeta) muestran "SIN PREAMP".
+- **Escenas en X32:** al cargar, el 48V solo cambia en las entradas que trae la escena; nunca se apaga "por las dudas" (en X32 suele haber stageboxes y condensadores).
+- Revisadas contra la documentación de OSC de X32 todas las direcciones que usa la app (faders, mutes, paneo, envíos, EQ, gate, compresor, DCA, mute groups, links, headamps, main st, matrices, medidores, solos).
+
 ## Novedades 0.5.5
 - **Fader del MAIN LR protegido.** Para que un roce no suba ni baje todo el PA: al tocarlo no se mueve durante ~0,6 s (arriba del fader se llena una barrita blanca); recién ahí queda agarrado y se mueve normal hasta que soltás. El doble toque ya no lo lleva a 0 dB. Vale en MEZCLA y en el detalle del MAIN. Los demás faders siguen igual.
 - **SALA: mapa de riesgo de acople, sin conectar nada.** Pestaña nueva arriba. Elegís qué canales son micrófonos (vienen tildados los que tienen señal o 48V), la salida a probar (MAIN o un monitor), apoyás la tablet cerca de los micrófonos y tocás MEDIR. La tablet tira ruido rosa por su parlante y la app escucha cada micrófono con el RTA de la consola, primero al nivel actual y después con la salida +3 dB. Las frecuencias que crecen mucho más que el resto son las que están cerca de acoplar: aparecen como "Riesgo ALTO en 2.51 kHz (sobre todo en VOZ GARKO)", con ✂ CORTAR (pide OK) en el EQ de esa salida. Si con +3 dB algo empieza a dispararse, la prueba se corta sola. Al terminar, cancelar o salir de SALA, la salida y el RTA vuelven como estaban. Usalo a volumen moderado y con los micrófonos en su lugar de show. Por ahora solo en X Air.

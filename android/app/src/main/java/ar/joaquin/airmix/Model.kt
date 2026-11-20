@@ -192,13 +192,13 @@ data class Strip(val kind: Kind, val idx: Int = 1, val pair: Boolean = false) {
     /**
      * Preamp que alimenta al canal según su FUENTE (no según el número de canal):
      * X Air: insrc 0-15 = entradas 1-16 -> /headamp/01..16 (17+ = AUX / USB, sin preamp).
-     * X32: source 1-128 = local + AES50 -> /headamp/000..127 (0 = OFF, 129+ = tarjeta / aux, sin preamp).
+     * X32: source 0-64 = OFF, In01-32, Aux 1-6, USB L/R, FX 1L-4R, Bus 01-16. Solo In01-32 tienen preamp, y cuál
+     * depende del ruteo de entradas (/config/routing/IN/1-8 … 25-32: AN1-8…AN25-32, A1-8…A41-48, B1-8…B41-48, CARD…):
+     * local -> /headamp/000-031, AES50 A -> 032-079, AES50 B -> 080-127, tarjeta -> sin preamp.
      */
     fun headampFor(src: Int): String? {
         if (kind != Kind.CH) return null
-        return if (c.isX32) {
-            if (src in 1..128) "/headamp/" + String.format(Locale.US, "%03d", src - 1) else null
-        } else {
+        return if (c.isX32) x32Headamp(src) else {
             if (src in 0..15) "/headamp/${Fmt.two(src + 1)}" else null
         }
     }
@@ -269,7 +269,7 @@ fun buildLayers(): List<Layer> {
 /**
  * Entradas físicas que se le pueden asignar a un canal (índice = valor de insrc / source). Igual en iOS.
  * X Air: /ch/NN/config/insrc 0.. = IN 01.. (tantas como entradas tenga la consola).
- * X32: /ch/NN/config/source 0 = OFF, 1-32 local, 33-80 AES50 A, 81-128 AES50 B, 129-160 tarjeta, 161-166 AUX, 167-168 talkback.
+ * X32: /ch/NN/config/source 0-64 = OFF, In01-32, Aux 1-6, USB L/R, FX 1L-4R, Bus 01-16 (X32 OSC, P.-G. Maillot).
  */
 fun sourceOptions(): List<String> {
     val c = App.console
@@ -277,12 +277,28 @@ fun sourceOptions(): List<String> {
     val l = ArrayList<String>()
     l.add("OFF")
     for (i in 1..32) l.add("IN ${Fmt.two(i)}")
-    for (i in 1..48) l.add("AES50 A ${Fmt.two(i)}")
-    for (i in 1..48) l.add("AES50 B ${Fmt.two(i)}")
-    for (i in 1..32) l.add("CARD ${Fmt.two(i)}")
-    for (i in 1..6) l.add("AUX ${i}")
-    l.add("TALKBACK INT"); l.add("TALKBACK EXT")
+    for (i in 1..6) l.add("AUX $i")
+    l.add("USB L"); l.add("USB R")
+    for (i in 1..4) { l.add("FX ${i}L"); l.add("FX ${i}R") }
+    for (i in 1..16) l.add("BUS ${Fmt.two(i)}")
     return l
+}
+
+/** X32: ruteo de entradas, de a bloques de 8 (In01-08 … In25-32). */
+val X32_IN_ROUTING = listOf("/config/routing/IN/1-8", "/config/routing/IN/9-16", "/config/routing/IN/17-24", "/config/routing/IN/25-32")
+
+/** X32: preamp de la fuente In01-32 según el ruteo (si no se sabe, el de fábrica: local 1-32). */
+fun x32Headamp(src: Int): String? {
+    if (src !in 1..32) return null
+    val block = (src - 1) / 8
+    val r = App.store.int(X32_IN_ROUTING[block], block)
+    val base = when (r) {
+        in 0..3 -> 8 * r            // AN1-8 … AN25-32 (entradas locales)
+        in 4..9 -> 32 + 8 * (r - 4) // AES50 A
+        in 10..15 -> 80 + 8 * (r - 10) // AES50 B
+        else -> return null         // tarjeta: sin preamp
+    }
+    return "/headamp/" + String.format(Locale.US, "%03d", base + (src - 1) % 8)
 }
 
 /**

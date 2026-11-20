@@ -81,6 +81,20 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 - **Escenas .scn:** el cargador no aplica el bloque `config`, así que el link de canales puede no restaurarse al cargar una escena.
 - **Chip SOLO:** usa `/-stat/solo`. Si la XR12 no lo manda, el chip no aparece nunca (CLR SOLO sigue en MEDIDORES igual).
 
+## Hecho en 0.5.6 (20/11/2026) — revisión X32 antes del show del sábado
+- ENTRADA X32 = lista real de /ch/NN/config/source (0-64).
+- Preamp X32 según /config/routing/IN/1-8…25-32 (AN → 000-031, A → 032-079, B → 080-127, CARD → sin preamp); se escucha el ruteo al conectar.
+- Escenas X32: el 48V no se fuerza a OFF si la escena no trae la línea de headamp.
+- Direcciones X32 verificadas contra X32Channel/Bus/Auxin/Fxrtn/Mtx/Dca/CfgMain/PrefStat.h (P.-G. Maillot).
+- **Sigue sin tocarse en X32:** fuente del RTA (EQ, detector de acople y SALA usan lo que tenga la consola; SALA avisa que es solo X Air).
+
+## Para probar en la X32 (sábado 21/11)
+- Conectar (puerto 10023) y ver que detecta X32.
+- Faders, mutes, nombres y medidores de canales, AUX IN, FX RTN, buses, matrices y main.
+- CONFIG de un canal: que ENTRADA muestre la fuente correcta y que GAIN/48V muevan el preamp correcto (sobre todo si hay stagebox).
+- Envíos a buses (SENDS ON FADER), EQ, gate, compresor.
+- Rack de efectos (FX 1-4 y 5-8).
+
 ## Hecho en 0.5.5 (17/11/2026)
 - **Fader del MAIN LR protegido** (FaderView.guarded en Android e iOS):
   - al tocarlo no se mueve durante 0,6 s (barrita blanca arriba del cap); después se mueve normal hasta soltar;
