@@ -20,11 +20,25 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 - Del 12/11/2026, no elegidas: escena por tema, memorias A/B/C/D, aviso grande de envíos, ring out guiado, registro del show, plantilla GyP, modo escenario oscuro, segunda pantalla, prueba de línea paso a paso.
 - Del 01/11/2026, no elegidas: automix, PRE/POST de envíos, safes al cargar escenas, GEQ en buses/main, auriculares/solo.
 - Respaldo antes de cargar escena, mute groups, vista "mi monitor" para el dúo, medidor grande del MAIN: propuestos el 31/10/2026, Joaquín no los eligió.
+- Del 22/11/2026, no elegidas: conexión sola a la última consola, aviso de canal con señal muteado, chequeo antes del show, comparar escena contra la consola, escenas en Google Drive, botón MUTE FX, compatibilidad con Behringer Wing.
 - **Compatibilidad con otras marcas** (Soundcraft, Yamaha, Allen & Heath, etc.) ni un clon "Bis". Joaquín lo descartó el 22/10/2026: es demasiado trabajo. No volver a proponerlo.
 
 ## Próxima versión
 
-1. **SALA: el ruido rosa tiene que salir de la consola al MAIN LR, no del parlante de la tablet** (Joaquín, 17/11/2026).
+1. **MODO DEMO sin consola** (Joaquín, 22/11/2026).
+   - Se ofrece en ESCENAS (no en la pantalla de conexión, "para que no esté tan adelante").
+   - Simula una XR12: nombres de canales, faders, mutes, envíos, EQ, efectos y medidores que se mueven (señal simulada, sin asignaciones en el camino caliente).
+   - Nada sale por la red mientras está en demo; cartel claro "MODO DEMO" en la barra de arriba y botón para salir.
+   - SALA, escenas a la consola y el aviso de actualización se comportan como sin conexión.
+2. **Calidad del wifi en la barra de arriba** (Joaquín, 22/11/2026).
+   - Solo el loguito de wifi con una luz al lado que va de rojo a verde **en gradiente** (no tres colores fijos).
+   - Color según el tiempo de respuesta de la consola (un pedido liviano que la consola siempre contesta, por ejemplo `/xinfo`): verde ≤ 20 ms, rojo ≥ 300 ms o respuestas perdidas, interpolado en el medio y suavizado.
+   - Va al lado de lo de conexión; en celular revisar que entre.
+3. **Mantener apretado un fader → envíos de ese canal** (Joaquín, 22/11/2026).
+   - Mini panel con los envíos del canal a cada bus (con nombre y color del bus) y fader para moverlos ahí mismo.
+   - Ojo con el fader del MAIN protegido (mantener 0,6 s ya lo agarra): este gesto es para tiras de canal/AUX/FX RTN; elegir el gesto (por ejemplo, mantener sobre el nombre o el medidor de la tira) para que no choque con mover el fader.
+   - Se cierra tocando afuera.
+4. **SALA: el ruido rosa tiene que salir de la consola al MAIN LR, no del parlante de la tablet** (Joaquín, 17/11/2026).
    - Joaquín: "la generación de ruido rosa sea desde la app hacia el main LR, es una función que tienen otras apps"; el parlante de la tablet "filtra y es malísimo".
    - Después él mide con alguno de los micrófonos.
    - **Límite técnico:** por wifi (OSC) la app solo manda órdenes, no audio. "Mandarlo desde la app" = prender el generador interno de la consola (oscilador / ruido rosa) por OSC y rutearlo al MAIN LR.
@@ -36,9 +50,9 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
      - en SALA, botón RUIDO ROSA → MAIN LR, con nivel (arranca bajo, por ejemplo -30 dB) y apagado automático al salir de SALA, al perder conexión o a los 60 s;
      - la medición usa ese ruido en vez del parlante, y el parlante de la tablet se saca.
    - **Si no existe:** avisarle a Joaquín con las alternativas, sin implementar nada.
-2. **SALA: guardar por lugar** (lo opcional del ítem SALA, quedó para después de 0.5.5).
+5. **SALA: guardar por lugar** (lo opcional del ítem SALA, quedó para después de 0.5.5).
    - Guardar el resultado con el nombre de la sala para la próxima vez.
-3. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+6. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
    - `android/airmix-debug.keystore` está en el historial público.
    - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
    - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
