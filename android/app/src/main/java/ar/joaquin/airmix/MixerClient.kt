@@ -29,6 +29,8 @@ class MixerClient(private val ctx: Context) {
         const val PORT_X32 = 10023
         const val METER_COUNT = 96
         const val RTA_BINS = 100
+        const val PING_EVERY_MS = 1000L
+        const val LOST_MS = 400f
     }
 
     @Volatile private var socket: DatagramSocket? = null
@@ -44,6 +46,18 @@ class MixerClient(private val ctx: Context) {
     /** Formato de medidores: X32 manda floats lineales, X Air int16 en dB*256. */
     @Volatile var x32 = false
     private var lastReopen = 0L
+
+    /** MODO DEMO: no sale nada por la red y no se escucha a la consola (ver Demo). */
+    @Volatile var demo = false
+
+    /**
+     * Calidad del wifi: tiempo de respuesta de la consola a /xinfo (un pedido liviano que siempre contesta),
+     * suavizado. -1 = sin dato (sin conexión o en demo). Un pedido sin respuesta en 1 s cuenta como LOST_MS.
+     */
+    @Volatile var rttMs = -1f
+        private set
+    @Volatile private var pingAt = 0L
+    private var lastPing = 0L
 
     private val pending = ConcurrentHashMap<String, ByteArray>()
     private val order = LinkedBlockingQueue<String>()
@@ -90,6 +104,8 @@ class MixerClient(private val ctx: Context) {
         port = knownPort
         lastRx = 0L
         lastKeep = 0L
+        rttMs = -1f
+        pingAt = 0L
         pending.clear()
         order.clear()
         return true
@@ -112,6 +128,7 @@ class MixerClient(private val ctx: Context) {
     fun node(path: String) = enqueue("node:$path", Osc.encode("/node", path))
 
     private fun enqueue(key: String, bytes: ByteArray) {
+        if (demo) return
         if (pending.put(key, bytes) == null) order.offer(key)
     }
 
@@ -188,6 +205,7 @@ class MixerClient(private val ctx: Context) {
                 continue
             }
             val len = pkt.length
+            if (demo) continue
             val fromHost = pkt.address == host
             if (fromHost) {
                 lastRx = SystemClock.uptimeMillis()
@@ -195,6 +213,13 @@ class MixerClient(private val ctx: Context) {
             }
             if (fromHost && parseMeters(buf, len)) continue
             val msg = Osc.decode(buf, len) ?: continue
+            if (fromHost && msg.address == "/xinfo") {
+                val sent = pingAt
+                if (sent != 0L) {
+                    pingAt = 0L
+                    rttSample((SystemClock.uptimeMillis() - sent).toFloat())
+                }
+            }
             if (msg.address == "/xinfo" && msg.args.size >= 4) {
                 discovered.add(
                     MixerInfo(
@@ -302,8 +327,21 @@ class MixerClient(private val ctx: Context) {
                 try { openSocket() } catch (_: Exception) {}
             }
             val h = host
-            if (h != null) {
+            if (demo) {
+                rttMs = -1f
+                pingAt = 0L
+            } else if (h != null) {
                 val alive = now - lastRx < 4000
+                // Calidad del wifi: un /xinfo por segundo mientras hay conexión.
+                if (!alive) {
+                    rttMs = -1f
+                    pingAt = 0L
+                } else if (now - lastPing >= PING_EVERY_MS) {
+                    if (pingAt != 0L) rttSample(LOST_MS)
+                    lastPing = now
+                    pingAt = now
+                    sendToMixer(xinfo, h)
+                }
                 if (!alive && lastRx != 0L && now - lastReopen > 6000) {
                     // Se perdió la consola: puede haber cambiado la red. Reabrimos el socket.
                     lastReopen = now
@@ -324,6 +362,11 @@ class MixerClient(private val ctx: Context) {
             }
             SystemClock.sleep(250)
         }
+    }
+
+    private fun rttSample(ms: Float) {
+        val r = rttMs
+        rttMs = if (r < 0f) ms else r * 0.7f + ms * 0.3f
     }
 
     private fun parseIp(ip: String): InetAddress? {

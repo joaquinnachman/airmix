@@ -1,5 +1,11 @@
 # AirMix — control liviano para Behringer XR12 / XR16 / XR18 / X32
 
+## Novedades 0.5.7
+- **MODO DEMO sin consola.** En ESCENAS, abajo al lado de ACERCA DE: "▶ MODO DEMO". Simula una XR12 con nombres, faders, mutes, envíos, EQ, efectos y medidores que se mueven, para probar la app o mostrarla sin la consola. Mientras está prendido no sale nada por la red; arriba a la derecha dice "▶ MODO DEMO ✕" (tocalo para salir). SALA, cargar/guardar escenas y el aviso de actualización se comportan como sin conexión.
+- **Calidad del wifi** en la barra de arriba, al lado de la conexión: el loguito de wifi con una luz que va de verde a rojo en gradiente según cuánto tarda la consola en responder (verde hasta 20 ms, rojo desde 300 ms o si se pierden respuestas). Tocala para ver los milisegundos. Gris = sin conexión.
+- **Envíos de un canal manteniendo apretado su nombre.** En MEZCLA, mantené apretado el nombre (o el título) de un canal, AUX o FX RTN: aparece un panel con sus envíos a cada bus (con el nombre y el color del bus) y a los FX, con un fader para cada uno. Se cierra tocando afuera. No choca con mover el fader ni con el fader protegido del MAIN.
+- **SALA: guardar por lugar.** Después de medir, "GUARDAR SALA" guarda el resultado con el nombre de la sala; "SALAS GUARDADAS" los muestra otra vez (con sus ✂ CORTAR) o los borra.
+
 ## Novedades 0.5.6 (revisión para X32 / M32)
 - **ENTRADA en X32:** la lista ahora es la real de la X32 (OFF, In 01-32, Aux 1-6, USB L/R, FX 1L-4R, Bus 01-16). Antes mostraba nombres de AES50/tarjeta que no correspondían.
 - **GAIN y 48V en X32:** el preamp se calcula según el ruteo de entradas de la consola (local, AES50 A o B / stagebox). Antes, un canal con fuente Aux/USB/FX podía mostrar el preamp de un stagebox. Fuentes sin preamp (Aux, USB, FX, Bus, tarjeta) muestran "SIN PREAMP".

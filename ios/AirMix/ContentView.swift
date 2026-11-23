@@ -24,6 +24,9 @@ struct ContentView: View {
     @State private var editFavs = false
     @AppStorage("favs") private var favs = ""
     @ObservedObject private var updater = Updater.shared
+    @ObservedObject private var stripSends = StripSends.shared
+    @State private var confirmDemoExit = false
+    @State private var wifiHint = false
 
     /// compact: iPhone angosto (tiras con scroll). small: cualquier pantalla baja (celular en horizontal): interfaz compacta.
     private var compact: Bool { hsc == .compact }
@@ -77,6 +80,10 @@ struct ContentView: View {
                     .padding(.top, small ? 42 : 58)
                     .allowsHitTesting(false)
             }
+            // Envíos de una tira (mantener apretado el nombre): panel encima de todo; tocar afuera lo cierra.
+            if stripSends.strip != nil {
+                StripSendsOverlay(small: small).allowsHitTesting(!locked)
+            }
             if showBigTimer {
                 BigTimerView(onClose: { showBigTimer = false }, onReset: { confirmReset = true })
                     .allowsHitTesting(!locked)
@@ -107,6 +114,12 @@ struct ContentView: View {
         }
         .statusBarHidden(true)
         .sheet(isPresented: $showConnect) { ConnectSheet() }
+        .confirmationDialog("¿Salir del modo demo?", isPresented: $confirmDemoExit, titleVisibility: .visible) {
+            Button("Salir del demo") { core.stopDemo() }
+        } message: {
+            Text("Se vuelve a la consola real (si está en la red).")
+        }
+        .alert(wifiHintText, isPresented: $wifiHint) { Button("OK", role: .cancel) {} }
         .onAppear {
             if UserDefaults.standard.string(forKey: "ip") == nil { showConnect = true }
             debugSetup()
@@ -115,7 +128,18 @@ struct ContentView: View {
             layerIdx = 0
             detail = nil
             sends = .main
+            stripSends.strip = nil
         }
+        .onChange(of: core.demo) { on in
+            if on { tab = .mix }
+        }
+    }
+
+    private var wifiHintText: String {
+        let rtt = core.client.rttMs
+        if core.demo { return "Modo demo: no hay consola." }
+        if !core.connected || rtt < 0 { return "Sin datos del wifi: no hay conexión con la consola." }
+        return "La consola responde en \(Int(rtt)) ms (verde ≤ \(Int(WifiQualityView.goodMs)) ms, rojo ≥ \(Int(WifiQualityView.badMs)) ms o respuestas perdidas)."
     }
 
     // MARK: barra superior
@@ -141,12 +165,16 @@ struct ContentView: View {
             SoloChip(small: small).allowsHitTesting(!locked)
             ClipChip(small: small).allowsHitTesting(!locked)
             lockButton
-            Button { showConnect = true } label: {
-                Text(core.connected ? "●  \(core.console.model)  \(core.client.host ?? "")" : "●  SIN CONEXIÓN")
+            // Calidad del wifi: loguito + luz de rojo a verde según el tiempo de respuesta de la consola.
+            WifiQualityView(small: small)
+                .onTapGesture { wifiHint = true }
+                .allowsHitTesting(!locked)
+            Button { if core.demo { confirmDemoExit = true } else { showConnect = true } } label: {
+                Text(core.demo ? "▶ MODO DEMO  ✕" : core.connected ? "●  \(core.console.model)  \(core.client.host ?? "")" : "●  SIN CONEXIÓN")
                     .font(bf(small ? 11 : 14))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    .foregroundColor(core.connected ? C.green : C.red)
+                    .foregroundColor(core.demo ? C.yellow : core.connected ? C.green : C.red)
                     .padding(.horizontal, small ? 8 : 12)
                     .frame(height: small ? 32 : 38)
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(C.line))
@@ -385,6 +413,11 @@ struct ContentView: View {
         case "corte":
             core.lost = true
             locked = true
+        case "demo":
+            core.startDemo()
+        case "envios":
+            core.startDemo()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { stripSends.strip = Strip(kind: .ch, idx: 1) }
         default: break
         }
     }
@@ -424,6 +457,25 @@ struct ContentView: View {
         let list = stripsOfKind(s.kind)
         guard let i = list.firstIndex(of: Strip(kind: s.kind, idx: s.idx)), !list.isEmpty else { return }
         detail = list[(i + dir + list.count) % list.count]
+    }
+}
+
+/// Fondo oscuro + panel de envíos de la tira; tocar afuera lo cierra.
+struct StripSendsOverlay: View {
+    let small: Bool
+    @ObservedObject private var sends = StripSends.shared
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.43).ignoresSafeArea()
+                .onTapGesture { sends.strip = nil }
+            if let s = sends.strip {
+                StripSendsPanel(strip: s, small: small)
+                    .frame(width: min(CGFloat(StripSends.targets(s).count) * (small ? 66 : 82) + 24, UIScreen.main.bounds.width - 32))
+                    .frame(height: small ? 270 : 380)
+                    .id(s)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -798,6 +850,8 @@ struct ScnDocument: FileDocument {
 
 struct ScenesView: View {
     @ObservedObject private var scenes = Scenes.shared
+    @ObservedObject private var core = Core.shared
+    @State private var confirmDemo = false
     @State private var name = "GYP " + { let f = DateFormatter(); f.dateFormat = "dd-MM"; return f.string(from: Date()) }()
     @State private var notes = ""
     @State private var importing = false
@@ -848,6 +902,10 @@ struct ScenesView: View {
                 Spacer(minLength: 0)
                 HStack {
                     Pill(text: "ACERCA DE", style: .outline, size: 12) { showAbout = true }.frame(width: 130, height: 36)
+                    // MODO DEMO: acá atrás a propósito (no en la pantalla de conexión).
+                    Pill(text: core.demo ? "SALIR DEL DEMO" : "▶ MODO DEMO", style: .outline, size: 12, idleColor: core.demo ? C.yellow : C.dim) {
+                        if core.demo { core.stopDemo() } else { confirmDemo = true }
+                    }.frame(width: 150, height: 36)
                     Spacer()
                 }
             }
@@ -905,6 +963,11 @@ struct ScenesView: View {
             confirmLoad = true
         }
         .sheet(isPresented: $showAbout) { AboutView() }
+        .confirmationDialog("Modo demo", isPresented: $confirmDemo, titleVisibility: .visible) {
+            Button("Entrar") { core.startDemo() }
+        } message: {
+            Text("Simula una XR12 para probar la app sin consola: nombres, faders, mutes, envíos, EQ, efectos y medidores que se mueven.\n\nMientras está prendido no sale nada por la red. Para salir, tocá \"MODO DEMO ✕\" arriba a la derecha.")
+        }
         .fileExporter(isPresented: $exporting, document: exportDoc, contentType: .data, defaultFilename: exportName + ".scn") { _ in }
         .onChange(of: scenes.exportText) { t in
             if let t = t {

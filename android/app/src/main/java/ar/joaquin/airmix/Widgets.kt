@@ -558,3 +558,63 @@ class LineCheckView(ctx: Context) : View(ctx) {
         }
     }
 }
+
+/**
+ * Calidad del wifi (barra de arriba): el loguito de wifi y una luz que va de rojo a verde en gradiente,
+ * según el tiempo de respuesta de la consola (MixerClient.rttMs). Igual que WifiQualityView en iOS.
+ */
+class WifiView(ctx: Context) : View(ctx) {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val r = RectF()
+    private val hsv = FloatArray(3)
+    /** Color actual de la luz (gris = sin dato). */
+    var light = C.TICK
+        private set
+
+    companion object {
+        const val GOOD_MS = 20f
+        const val BAD_MS = 300f
+
+        /** 0 = verde (≤ 20 ms) … 1 = rojo (≥ 300 ms o respuestas perdidas). -1 = sin dato. */
+        fun badness(rtt: Float): Float = if (rtt < 0f) -1f else ((rtt - GOOD_MS) / (BAD_MS - GOOD_MS)).coerceIn(0f, 1f)
+    }
+
+    /** Lo llama el tick (cada ~0,5 s). Solo redibuja si cambió el color. */
+    fun update(rtt: Float) {
+        val b = badness(rtt)
+        val c = if (b < 0f) C.TICK else {
+            hsv[0] = 120f * (1f - b) // 120° verde → 60° amarillo → 0° rojo
+            hsv[1] = 0.78f
+            hsv[2] = 0.92f
+            Color.HSVToColor(hsv)
+        }
+        if (c != light) {
+            light = c
+            invalidate()
+        }
+    }
+
+    override fun onDraw(c: Canvas) {
+        val h = height.toFloat()
+        val s = minOf(h * 0.62f, width * 0.6f)
+        val cx = s / 2f + dpf(2f)
+        val by = h / 2f + s * 0.42f
+        // Loguito de wifi: tres arcos + punto.
+        p.style = Paint.Style.STROKE
+        p.strokeCap = Paint.Cap.ROUND
+        p.strokeWidth = maxOf(dpf(1.6f), s * 0.11f)
+        p.color = C.TEXT_DIM
+        for (k in 1..3) {
+            val rad = s * 0.28f * k
+            r.set(cx - rad, by - rad, cx + rad, by + rad)
+            c.drawArc(r, 225f, 90f, false, p)
+        }
+        p.style = Paint.Style.FILL
+        c.drawCircle(cx, by - dpf(0.5f), p.strokeWidth * 0.75f, p)
+        // Luz.
+        val lr = maxOf(dpf(4f), s * 0.2f)
+        val lx = width - lr - dpf(2f)
+        p.color = light
+        c.drawCircle(lx, h / 2f, lr, p)
+    }
+}

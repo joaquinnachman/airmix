@@ -24,14 +24,25 @@ final class Store {
     /// Parámetro para una vista: si no tiene valor todavía, se pide a la consola.
     func param(_ a: String) -> Param {
         if let p = params[a] {
-            if !p.wanted { p.wanted = true; if p.value == nil { Core.shared.client.query(a) } }
+            if !p.wanted { p.wanted = true; if p.value == nil { ask(p) } }
+            else if p.value == nil && Demo.on { ask(p) }
             return p
         }
         let p = Param(a)
         p.wanted = true
         params[a] = p
-        Core.shared.client.query(a)
+        ask(p)
         return p
+    }
+
+    /// Pide el valor a la consola; en MODO DEMO no hay consola: se usa un valor de ejemplo.
+    private func ask(_ p: Param) {
+        if Demo.on { p.value = Demo.valueFor(p.address) } else { Core.shared.client.query(p.address) }
+    }
+
+    /// MODO DEMO: completa con valores de ejemplo todo lo que está en pantalla y no tiene valor.
+    func fillMissing() {
+        for p in params.values where p.wanted && p.value == nil { p.value = Demo.valueFor(p.address) }
     }
 
     func value(_ a: String) -> OscArg? { params[a]?.value }
@@ -121,6 +132,8 @@ final class Core: ObservableObject {
     @Published var links: Set<Int> = []
     /// Se cortó la conexión después de haber estado conectados (franja roja + vibración).
     @Published var lost = false
+    /// MODO DEMO prendido (simula una XR12, no sale nada por la red).
+    @Published private(set) var demo = false
     private var everConnected = false
     private var linkTick = 0
     private var watched = Set<String>()
@@ -176,6 +189,35 @@ final class Core: ObservableObject {
         return true
     }
 
+    /// MODO DEMO: borra lo que había de la consola real y carga la XR12 de ejemplo.
+    func startDemo() {
+        everConnected = false
+        lost = false
+        Demo.on = true
+        client.demo = true
+        demo = true
+        Store.shared.resetValues()
+        applyModel(Demo.model)
+        layoutVersion += 1
+        Demo.seed()
+        Store.shared.fillMissing()
+    }
+
+    /// Sale del MODO DEMO: se olvidan los valores de ejemplo y se vuelve a pedir todo a la consola (si hay).
+    func stopDemo() {
+        Demo.on = false
+        client.demo = false
+        demo = false
+        client.clearMeters()
+        for i in 0..<MixerClient.rtaBins { client.rta[i] = -100 }
+        Clip.reset()
+        Store.shared.resetValues()
+        applyModel(UserDefaults.standard.string(forKey: "model") ?? "XR12")
+        layoutVersion += 1
+        connected = false
+        Store.shared.requeryWanted()
+    }
+
     private func tick() {
         for m in client.drainInbox() {
             if m.address == "node" || m.address == "/node" {
@@ -183,7 +225,8 @@ final class Core: ObservableObject {
                 continue
             }
             if m.address == "/xinfo" {
-                if m.args.count >= 4 {
+                // La calidad del wifi pide /xinfo cada segundo: si no cambió nada, no se toca nada (ni se redibuja).
+                if m.args.count >= 4 && (m.args[3].stringValue != firmware || m.args[2].stringValue != console.model) {
                     firmware = m.args[3].stringValue
                     UserDefaults.standard.set(m.args[2].stringValue, forKey: "model")
                     applyModel(m.args[2].stringValue)
@@ -205,7 +248,12 @@ final class Core: ObservableObject {
         }
         if Room.shared.running { Room.shared.tick(Date().timeIntervalSince1970) }
         let c = client.isConnected()
-        if c { Clip.scan(client.meters, now: Date().timeIntervalSince1970) }
+        if demo {
+            // MODO DEMO: señal simulada en los medidores (y en el RTA si hay un EQ abierto).
+            let now = Date().timeIntervalSince1970
+            Demo.tick(client.meters, client.rta, rtaOn: client.rtaWanted, now: now)
+            Clip.scan(client.meters, now: now)
+        } else if c { Clip.scan(client.meters, now: Date().timeIntervalSince1970) }
         if c {
             requeryTick += 1
             if requeryTick >= 45 { requeryTick = 0; Store.shared.requeryMissing() }
@@ -219,7 +267,7 @@ final class Core: ObservableObject {
                 client.clearMeters()
                 Clip.reset()
             }
-            let shouldShow = !c && everConnected
+            let shouldShow = !c && everConnected && !demo
             if shouldShow && !lost {
                 // Vibra (en iPhone; el iPad no tiene motor de vibración) y avisa.
                 UINotificationFeedbackGenerator().notificationOccurred(.error)

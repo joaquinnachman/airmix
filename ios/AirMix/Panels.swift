@@ -24,9 +24,14 @@ struct StripView: View {
         let k = compact
         VStack(spacing: k ? 3 : 6) {
             Text(strip.title).font(bf(k ? 9 : 11)).foregroundColor(Sector.of(strip.kind)).lineLimit(1).minimumScaleFactor(0.7).padding(.top, k ? 2 : 4)
+                .contentShape(Rectangle())
+                .onLongPressGesture(minimumDuration: 0.5) { StripSends.shared.show(strip) }
             NameChip(strip: strip, height: k ? 26 : 34)
                 .padding(.horizontal, k ? 4 : 6)
+                .contentShape(Rectangle())
                 .onTapGesture { onOpen(strip) }
+                // Mantener apretado el nombre (o el título) → envíos de esta tira a cada bus (no choca con mover el fader).
+                .onLongPressGesture(minimumDuration: 0.5) { StripSends.shared.show(strip) }
             if let pan = strip.panAddr {
                 PanView(addr: pan).frame(height: k ? 18 : 26)
             } else {
@@ -765,5 +770,87 @@ struct FxEditor: View {
             for k in 1...64 { Store.shared.forget("/fx/\(n)/par/\(Fmt.two(k))") }
             for k in 1...16 { Core.shared.client.query("/fx/\(n)/par/\(Fmt.two(k))") }
         }
+    }
+}
+
+/// Mantener apretado el nombre de una tira → mini panel de envíos (ContentView lo muestra encima de todo).
+final class StripSends: ObservableObject {
+    static let shared = StripSends()
+    @Published var strip: Strip?
+
+    /// Destinos con envío desde esta tira: buses y (en X Air) FX 1-4.
+    static func targets(_ s: Strip) -> [SendTarget] {
+        let c = Core.shared.console
+        var t: [SendTarget] = []
+        for b in 1...max(c.buses, 1) where c.buses > 0 { t.append(SendTarget(bus: b, fx: 0)) }
+        if c.fxSends > 0 { for f in 1...c.fxSends { t.append(SendTarget(bus: 0, fx: f)) } }
+        return t.filter { s.sendAddr($0) != nil }
+    }
+
+    func show(_ s: Strip) {
+        guard !StripSends.targets(s).isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        strip = s
+    }
+}
+
+/// Mini panel con los envíos de una tira (canal, AUX o FX RTN) a cada bus y FX, con nombre y color del bus
+/// y un fader para moverlos ahí mismo. Igual que stripSendsPanel en Android.
+struct StripSendsPanel: View {
+    let strip: Strip
+    let small: Bool
+    @ObservedObject private var name: Param
+
+    init(strip: Strip, small: Bool) {
+        self.strip = strip
+        self.small = small
+        _name = ObservedObject(wrappedValue: Store.shared.param(strip.nameAddr))
+    }
+
+    var body: some View {
+        let n = (name.value?.stringValue ?? "").trimmingCharacters(in: .whitespaces)
+        VStack(alignment: .leading, spacing: 4) {
+            Text("ENVÍOS · \(strip.title)" + (n.isEmpty ? "" : " · \(n)"))
+                .font(bf(small ? 13 : 16)).foregroundColor(Sector.of(strip.kind)).lineLimit(1).minimumScaleFactor(0.6)
+            Text("Tocá afuera para cerrar").font(bf(small ? 10 : 11)).foregroundColor(C.dim)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(StripSends.targets(strip), id: \.label) { t in
+                        SendColumn(strip: strip, target: t, small: small)
+                            .frame(width: small ? 62 : 78)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 14).fill(C.surface))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(C.line))
+    }
+}
+
+private struct SendColumn: View {
+    let strip: Strip
+    let target: SendTarget
+    let small: Bool
+    @ObservedObject private var color: Param
+
+    init(strip: Strip, target: SendTarget, small: Bool) {
+        self.strip = strip
+        self.target = target
+        self.small = small
+        _color = ObservedObject(wrappedValue: target.bus > 0 ? Store.shared.param(Strip(kind: .bus, idx: target.bus).colorAddr) : Param("-"))
+    }
+
+    var body: some View {
+        let addr = strip.sendAddr(target) ?? ""
+        let c = target.bus > 0 ? BusColor.of(color.int ?? 0) : Sector.of(.fxsend)
+        VStack(spacing: 2) {
+            SendTargetName(target: target).font(bf(small ? 11 : 13)).foregroundColor(c)
+                .lineLimit(1).minimumScaleFactor(0.5).padding(.horizontal, 2)
+            DbLabel(addr: addr, color: c).frame(height: small ? 14 : 18)
+            FaderView(addr: addr, fill: c)
+        }
+        .padding(.vertical, 4).padding(.horizontal, 3)
+        .background(RoundedRectangle(cornerRadius: 10).fill(C.strip))
     }
 }

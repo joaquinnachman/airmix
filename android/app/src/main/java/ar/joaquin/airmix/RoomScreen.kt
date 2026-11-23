@@ -125,6 +125,23 @@ object RoomScreen {
         measure.activeColor = C.GREEN
         left.addView(measure, lp(MATCH, dp(sz(54, 42))).m(t = dp(sz(10, 6))))
 
+        // Guardar por lugar: el resultado queda con el nombre de la sala para la próxima vez.
+        val prefs = getSharedPreferences("airmix", Context.MODE_PRIVATE)
+        val placeRow = row()
+        val saveBtn = Btn(ctx, "GUARDAR SALA", BtnStyle.OUTLINE, sz(13f, 11f))
+        saveBtn.fitOneLine(8)
+        placeRow.addView(saveBtn, lp(0, dp(sz(40, 32)), 1f).m(r = dp(6)))
+        val listBtn = Btn(ctx, "SALAS GUARDADAS", BtnStyle.OUTLINE, sz(13f, 11f))
+        listBtn.fitOneLine(8)
+        placeRow.addView(listBtn, lp(0, dp(sz(40, 32)), 1f))
+        left.addView(placeRow, lp(MATCH, WRAP).m(t = dp(sz(8, 6))))
+        saveBtn.setOnClickListener {
+            if (Room.running) return@setOnClickListener
+            if (Room.result == null) Toast.makeText(ctx, "Primero medí (o abrí una sala guardada).", Toast.LENGTH_SHORT).show()
+            else askPlace(ctx, prefs)
+        }
+        listBtn.setOnClickListener { if (!Room.running) showSaved(ctx, prefs) }
+
         val leftScroll = ScrollView(ctx)
         leftScroll.isVerticalScrollBarEnabled = false
         leftScroll.addView(left, android.widget.FrameLayout.LayoutParams(MATCH, WRAP))
@@ -198,6 +215,59 @@ object RoomScreen {
         })
         refresh()
         root
+    }
+
+    private fun askPlace(ctx: Context, prefs: android.content.SharedPreferences) = with(ctx) {
+        val box = col()
+        box.setPadding(dp(24), dp(8), dp(24), 0)
+        val name = android.widget.EditText(ctx)
+        name.setTextColor(C.TEXT)
+        name.setHintTextColor(C.TICK)
+        name.hint = "Nombre de la sala (ej.: Teatro, bar, fiesta…)"
+        name.setSingleLine()
+        name.setText(Room.result?.place ?: "")
+        box.addView(name, lp(MATCH, WRAP))
+        AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Guardar sala")
+            .setMessage("Se guarda en el dispositivo el resultado que está en pantalla. Si ya hay una sala con ese nombre, se reemplaza.")
+            .setView(box)
+            .setPositiveButton("Guardar") { _, _ ->
+                val ok = Room.save(prefs, name.text.toString())
+                Toast.makeText(ctx, if (ok) "✓ Sala guardada" else "Poné un nombre para la sala", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+        Unit
+    }
+
+    private fun showSaved(ctx: Context, prefs: android.content.SharedPreferences) {
+        val list = Room.saved(prefs)
+        if (list.isEmpty()) {
+            Toast.makeText(ctx, "Todavía no hay salas guardadas: medí y tocá GUARDAR SALA.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val df = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US)
+        val labels = list.map { "${it.place}  ·  ${df.format(java.util.Date(it.at))}  ·  ${it.outName}" }.toTypedArray()
+        AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Salas guardadas")
+            .setItems(labels) { _, i ->
+                val r = list[i]
+                AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(r.place)
+                    .setMessage("${df.format(java.util.Date(r.at))} · ${r.outName} · ${if (r.alerts.isEmpty()) "sin riesgos marcados" else "${r.alerts.size} alertas"}")
+                    .setPositiveButton("Ver") { _, _ -> Room.show(r) }
+                    .setNeutralButton("Borrar") { _, _ ->
+                        AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                            .setMessage("¿Borrar la sala \"${r.place}\"?")
+                            .setPositiveButton("Borrar") { _, _ -> Room.delete(prefs, r.place) }
+                            .setNegativeButton("Cancelar", null)
+                            .show()
+                    }
+                    .setNegativeButton("Cerrar", null)
+                    .show()
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
     }
 
     private fun confirmCut(ctx: Context, res: Room.Result, a: Room.Alert) {

@@ -52,3 +52,7 @@
 | RTA con la fuente de la tira abierta (X Air `/-stat/rta/source`; X32 sin cambios) | ✅ | ✅ |
 | Fader del MAIN LR protegido: mantener ~0,6 s para moverlo (barrita), sin doble toque a 0 dB | ✅ | ✅ |
 | SALA: mapa de riesgo de acople sin conectar nada (RTA por micrófono, pasada normal y +3 dB, ruido rosa del parlante, ✂ CORTAR en MAIN/monitor) — Room.kt + RoomScreen.kt / Room.swift | ✅ | ✅ (solo X Air) |
+| MODO DEMO sin consola (XR12 simulada, nada sale por la red; se entra desde ESCENAS) — Demo.kt / Demo.swift | ✅ | ✅ |
+| Calidad del wifi en la barra (luz verde→rojo según respuesta a /xinfo, 20–300 ms) — WifiView / WifiQualityView | ✅ | ✅ |
+| Mantener apretado el nombre de una tira → panel de envíos a buses y FX con faders (StripSends) | ✅ | ✅ |
+| SALA: guardar el resultado por lugar y volver a verlo (SALAS GUARDADAS) | ✅ | ✅ |

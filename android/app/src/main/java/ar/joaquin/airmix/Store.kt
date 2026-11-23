@@ -62,7 +62,13 @@ class Store {
         val list = listeners.getOrPut(addr) { ArrayList() }
         list.add(cb)
         val v = values[addr]
-        if (v != null) cb(v) else App.client?.query(addr)
+        if (v != null) cb(v)
+        else if (Demo.on) {
+            // MODO DEMO: no hay consola a quien preguntar; se usa un valor de ejemplo.
+            val d = Demo.valueFor(addr)
+            values[addr] = d
+            cb(d)
+        } else App.client?.query(addr)
         return {
             list.remove(cb)
             if (list.isEmpty() && listeners[addr] === list) listeners.remove(addr)
@@ -97,6 +103,11 @@ class Store {
         values.remove(addr)
         touched.remove(addr)
         attempts.remove(addr)
+    }
+
+    /** MODO DEMO: completa con valores de ejemplo todo lo que está en pantalla y no tiene valor. */
+    fun fillMissing() {
+        for (k in listeners.keys.toList()) if (values[k] == null) incoming(k, Demo.valueFor(k))
     }
 
     fun resetValues() {

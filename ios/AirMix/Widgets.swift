@@ -692,3 +692,33 @@ struct DynGraphView: View {
         }
     }
 }
+
+/// Calidad del wifi (barra de arriba): el loguito de wifi y una luz que va de rojo a verde en gradiente,
+/// según el tiempo de respuesta de la consola (MixerClient.rttMs). Igual que WifiView en Android.
+struct WifiQualityView: View {
+    let small: Bool
+    @ObservedObject private var core = Core.shared
+    static let goodMs: Float = 20
+    static let badMs: Float = 300
+
+    /// 0 = verde (≤ 20 ms) … 1 = rojo (≥ 300 ms o respuestas perdidas). -1 = sin dato.
+    static func badness(_ rtt: Float) -> Float { rtt < 0 ? -1 : min(max((rtt - goodMs) / (badMs - goodMs), 0), 1) }
+
+    static func color(_ rtt: Float) -> Color {
+        let b = badness(rtt)
+        if b < 0 { return C.tick }
+        return Color(hue: Double(120 * (1 - b)) / 360, saturation: 0.78, brightness: 0.92) // verde → amarillo → rojo
+    }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+            let rtt: Float = core.connected ? core.client.rttMs : -1
+            HStack(spacing: small ? 3 : 4) {
+                Image(systemName: "wifi").font(.system(size: small ? 13 : 16, weight: .bold)).foregroundColor(C.dim)
+                Circle().fill(WifiQualityView.color(rtt)).frame(width: small ? 8 : 10, height: small ? 8 : 10)
+            }
+        }
+        .frame(width: small ? 32 : 40, height: small ? 32 : 38)
+        .contentShape(Rectangle())
+    }
+}

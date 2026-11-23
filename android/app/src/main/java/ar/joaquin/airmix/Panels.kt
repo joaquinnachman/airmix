@@ -22,13 +22,19 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     col.setBackgroundColor(C.STRIP)
     val k = Layout.compact
 
-    col.addView(label(s.title, sz(12f, 10f), Sector.of(s.kind)), lp(MATCH, dp(sz(24, 16))).m(t = dp(sz(6, 3))))
+    val title = label(s.title, sz(12f, 10f), Sector.of(s.kind))
+    col.addView(title, lp(MATCH, dp(sz(24, 16))).m(t = dp(sz(6, 3))))
 
     val name = label(s.title, sz(15f, 12f))
     name.setPadding(dp(4), 0, dp(4), 0)
     name.fitOneLine(sz(8, 7))
     applyScribble(name, 0)
     name.setOnClickListener { onOpen(s) }
+    // Mantener apretado el nombre (o el título) → envíos de esta tira a cada bus (no choca con mover el fader).
+    if (s.sendAddr(SendTarget(bus = 1)) != null) {
+        name.setOnLongClickListener { StripSends.show(name, s); true }
+        title.setOnLongClickListener { StripSends.show(title, s); true }
+    }
     name.bind(s.nameAddr) { v -> name.text = v.toString().ifEmpty { s.title } }
     name.bind(s.colorAddr) { v -> applyScribble(name, v.asI()) }
     col.addView(name, lp(MATCH, dp(sz(36, 26))).m(dp(sz(8, 4)), 0, dp(sz(8, 4)), dp(sz(6, 3))))
@@ -817,4 +823,87 @@ object NameCommit {
             }
         }, 1700)
     }
+}
+
+/** Mantener apretado el nombre de una tira → mini panel de envíos (lo muestra MainActivity encima de todo). */
+object StripSends {
+    var onShow: ((Strip) -> Unit)? = null
+
+    fun show(anchor: View, s: Strip) {
+        anchor.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        onShow?.invoke(s)
+    }
+
+    /** Destinos con envío desde esta tira: buses y (en X Air) FX 1-4. */
+    fun targets(s: Strip): List<SendTarget> {
+        val t = ArrayList<SendTarget>()
+        for (b in 1..App.console.buses) t.add(SendTarget(bus = b))
+        for (f in 1..App.console.fxSends) t.add(SendTarget(fx = f))
+        return t.filter { s.sendAddr(it) != null }
+    }
+}
+
+/**
+ * Mini panel con los envíos de una tira (canal, AUX o FX RTN) a cada bus y FX, con nombre y color del bus
+ * y un fader para moverlos ahí mismo. Igual que StripSendsPanel en iOS.
+ */
+fun Context.stripSendsPanel(s: Strip): View {
+    val list = StripSends.targets(s)
+    val box = col()
+    box.background = rounded(C.SURFACE, 14, C.LINE)
+    box.setPadding(dp(10), dp(8), dp(10), dp(10))
+    box.isClickable = true // los toques adentro no cierran el panel
+    val head = label("ENVÍOS · ${s.title}", sz(16f, 13f), Sector.of(s.kind), Gravity.START or Gravity.CENTER_VERTICAL)
+    head.bind(s.nameAddr) { v ->
+        val n = v.toString().trim()
+        head.text = if (n.isEmpty()) "ENVÍOS · ${s.title}" else "ENVÍOS · ${s.title} · $n"
+    }
+    box.addView(head, lp(MATCH, dp(sz(26, 20))))
+    box.addView(label("Tocá afuera para cerrar", sz(11f, 10f), C.TEXT_DIM, Gravity.START or Gravity.CENTER_VERTICAL), lp(MATCH, dp(sz(16, 14))))
+
+    val r = row()
+    r.gravity = Gravity.TOP
+    for (t in list) {
+        val addr = s.sendAddr(t) ?: continue
+        val c = col()
+        c.background = rounded(C.STRIP, 10)
+        c.setPadding(dp(3), dp(4), dp(3), dp(4))
+        val color = if (t.fx > 0) Sector.FXSEND else C.SENDS
+        val name = label(t.label, sz(13f, 11f), color)
+        name.fitOneLine(7)
+        name.setPadding(dp(2), 0, dp(2), 0)
+        if (t.fx > 0) name.bind("/fx/${t.fx}/type") { v -> name.text = Fx.label(t.fx, v.asI()) }
+        else name.bind(t.nameAddr!!) { v -> name.text = t.display(v.toString()) }
+        c.addView(name, lp(MATCH, dp(sz(22, 18))))
+        val db = label("", sz(12f, 10f), color)
+        db.fitOneLine(7)
+        c.addView(db, lp(MATCH, dp(sz(18, 14))))
+        val fader = FaderView(this)
+        fader.fillColor = color
+        if (t.bus > 0) {
+            fader.bind(Strip(Kind.BUS, t.bus).colorAddr) { v ->
+                val bc = BusColor.of(v.asI())
+                fader.fillColor = bc
+                fader.invalidate()
+                name.setTextColor(bc)
+                db.setTextColor(bc)
+            }
+        }
+        fader.bind(addr) { v ->
+            fader.setValue(v.asF())
+            db.text = Fmt.faderDb(v.asF())
+        }
+        fader.onUserChange = { f ->
+            App.store.set(addr, f)
+            db.text = Fmt.faderDb(f)
+        }
+        c.addView(fader, lp(MATCH, 0, 1f))
+        r.addView(c, lp(dp(sz(78, 62)), MATCH).m(r = dp(4)))
+    }
+    val hs = android.widget.HorizontalScrollView(this)
+    hs.isHorizontalScrollBarEnabled = false
+    hs.isFillViewport = true
+    hs.addView(r, FrameLayout.LayoutParams(WRAP, MATCH))
+    box.addView(hs, lp(MATCH, 0, 1f).m(t = dp(4)))
+    return box
 }

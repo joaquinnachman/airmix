@@ -30,6 +30,22 @@ final class MixerClient {
 
     var x32 = false
 
+    /// MODO DEMO: no sale nada por la red y no se escucha a la consola (ver Demo).
+    var demo: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return _demo }
+        set { lock.lock(); _demo = newValue; lock.unlock() }
+    }
+    private var _demo = false
+
+    /// Calidad del wifi: tiempo de respuesta de la consola a /xinfo (un pedido liviano que siempre contesta),
+    /// suavizado, en ms. -1 = sin dato (sin conexión o en demo). Un pedido sin respuesta en 1 s cuenta como lostMs.
+    var rttMs: Float { lock.lock(); defer { lock.unlock() }; return _rtt }
+    private var _rtt: Float = -1
+    private var pingAt: TimeInterval = 0
+    private var lastPing: TimeInterval = 0
+    static let pingEvery: TimeInterval = 1
+    static let lostMs: Float = 400
+
     /// RTA de la consola: 100 bandas de 20 Hz a 20 kHz en dB (X Air /meters/4, X32 /meters/15).
     let rta: UnsafeMutablePointer<Float> = {
         let p = UnsafeMutablePointer<Float>.allocate(capacity: MixerClient.rtaBins)
@@ -89,6 +105,8 @@ final class MixerClient {
         _port = knownPort
         _lastRx = 0
         lastKeep = 0
+        _rtt = -1
+        pingAt = 0
         pending.removeAll()
         order.removeAll()
         lock.unlock()
@@ -109,6 +127,7 @@ final class MixerClient {
 
     private func enqueue(_ key: String, _ data: Data) {
         lock.lock()
+        if _demo { lock.unlock(); return }
         let isNew = pending[key] == nil
         pending[key] = data
         if isNew { order.append(key) }
@@ -265,6 +284,7 @@ final class MixerClient {
             let fromPort = Int(UInt16(bigEndian: from.sin_port))
 
             lock.lock()
+            if _demo { lock.unlock(); continue }
             let fromHost = (fromIP == _host)
             if fromHost {
                 _lastRx = Date().timeIntervalSince1970
@@ -274,6 +294,14 @@ final class MixerClient {
 
             if fromHost && parseMeters(buf, n) { continue }
             guard let msg = Osc.decode(buf, n) else { continue }
+            if fromHost && msg.address == "/xinfo" {
+                lock.lock()
+                if pingAt > 0 {
+                    rttSample(Float((Date().timeIntervalSince1970 - pingAt) * 1000))
+                    pingAt = 0
+                }
+                lock.unlock()
+            }
             if msg.address == "/xinfo" && msg.args.count >= 4 {
                 let info = MixerInfo(ip: fromIP, port: fromPort, name: msg.args[1].stringValue,
                                      model: msg.args[2].stringValue, firmware: msg.args[3].stringValue)
@@ -355,12 +383,30 @@ final class MixerClient {
         }
     }
 
+    /// Llamar con el lock tomado.
+    private func rttSample(_ ms: Float) {
+        _rtt = _rtt < 0 ? ms : _rtt * 0.7 + ms * 0.3
+    }
+
     private func keepAliveLoop() {
         while running {
             let now = Date().timeIntervalSince1970
             if currentFd() < 0 { openSocket() }
-            if let h = host {
+            if demo {
+                lock.lock(); _rtt = -1; pingAt = 0; lock.unlock()
+            } else if let h = host {
                 let alive = now - lastRx < 4
+                // Calidad del wifi: un /xinfo por segundo mientras hay conexión.
+                if !alive {
+                    lock.lock(); _rtt = -1; pingAt = 0; lock.unlock()
+                } else if now - lastPing >= MixerClient.pingEvery {
+                    lock.lock()
+                    if pingAt > 0 { rttSample(MixerClient.lostMs) }
+                    lastPing = now
+                    pingAt = now
+                    lock.unlock()
+                    sendToMixer(xinfo, h)
+                }
                 if !alive && lastRx != 0 && now - lastReopen > 6 {
                     lastReopen = now
                     openSocket()

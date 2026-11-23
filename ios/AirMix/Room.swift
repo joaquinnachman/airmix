@@ -23,8 +23,8 @@ final class Room: ObservableObject {
     static let hiBin = 91
     static let bins = MixerClient.rtaBins
 
-    struct Alert: Identifiable {
-        let id = UUID()
+    struct Alert: Identifiable, Codable {
+        var id = UUID()
         let hz: Float
         let high: Bool
         let chName: String
@@ -36,13 +36,17 @@ final class Room: ObservableObject {
         }
     }
 
-    struct Result {
+    struct Result: Codable {
         let outBus: Int
         let outName: String
         let score: [Float]
         let spectrum: [Float]
         let alerts: [Alert]
         let aborted: Bool
+        /// Cuándo se midió (ms desde 1970, igual que Android).
+        var at: Double = Date().timeIntervalSince1970 * 1000
+        /// Nombre de la sala (vacío si todavía no se guardó).
+        var place: String = ""
     }
 
     /// Canales elegidos como micrófonos (índice = canal - 1). userPicked: ya no se tildan solos.
@@ -254,6 +258,57 @@ final class Room: ObservableObject {
         return Result(outBus: outBus, outName: outName(outBus), score: score, spectrum: spec, alerts: alerts, aborted: aborted)
     }
 
+    // MARK: salas guardadas
+
+    /// Hasta cuántas salas se guardan (la más vieja se va).
+    static let maxSaved = 30
+    private static let key = "rooms"
+
+    /// Salas guardadas, la más nueva primero.
+    func saved() -> [Result] {
+        guard let d = UserDefaults.standard.data(forKey: Room.key),
+              let l = try? JSONDecoder().decode([Result].self, from: d) else { return [] }
+        return l
+    }
+
+    /// Guarda el resultado que está en pantalla con el nombre de la sala (si ya había una con ese nombre, la reemplaza).
+    @discardableResult
+    func save(place: String) -> Bool {
+        guard var r = result else { return false }
+        let name = String(place.trimmingCharacters(in: .whitespaces).prefix(40))
+        if name.isEmpty { return false }
+        r.place = name
+        var list = saved().filter { $0.place.lowercased() != name.lowercased() }
+        list.insert(r, at: 0)
+        if list.count > Room.maxSaved { list.removeLast(list.count - Room.maxSaved) }
+        write(list)
+        result = r
+        status = "Guardada como \"\(name)\"."
+        return true
+    }
+
+    func delete(place: String) {
+        write(saved().filter { $0.place != place })
+    }
+
+    /// Muestra una sala guardada (para comparar o para cortar de nuevo lo que marcó).
+    func show(_ r: Result) {
+        if running { return }
+        result = r
+        outBus = min(max(r.outBus, 0), Core.shared.console.buses)
+        status = "Sala guardada: \(r.place) · \(Room.dateText(r.at)) · \(r.outName)"
+    }
+
+    static func dateText(_ ms: Double) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM/yyyy"
+        return f.string(from: Date(timeIntervalSince1970: ms / 1000))
+    }
+
+    private func write(_ list: [Result]) {
+        if let d = try? JSONEncoder().encode(list) { UserDefaults.standard.set(d, forKey: Room.key) }
+    }
+
     /// Para las capturas: un resultado de ejemplo.
     func demo() {
         var score = (0..<Room.bins).map { (i: Int) -> Float in Float(0.4 * sin(Double(i) / 5)) }
@@ -270,8 +325,8 @@ final class Room: ObservableObject {
             Alert(hz: Room.binHz(73), high: true, chName: "VOZ GARKO", db: 5.6, note: ""),
             Alert(hz: Room.binHz(55), high: false, chName: "VOZ PALMI", db: 2.7, note: ""),
             Alert(hz: Room.binHz(38), high: false, chName: "", db: 0, note: "pico en la sala"),
-        ], aborted: false)
-        status = "Listo. Todo volvió como estaba."
+        ], aborted: false, place: "SALA DE PRUEBA")
+        status = "Sala guardada: SALA DE PRUEBA · MAIN LR"
         mics[0] = true; mics[1] = true; mics[2] = true
         userPicked = true
     }
@@ -353,6 +408,9 @@ struct RoomView: View {
     @State private var error: String?
     @State private var cutAlert: Room.Alert?
     @State private var cutMsg: String?
+    @State private var askPlace = false
+    @State private var placeName = ""
+    @State private var showSaved = false
 
     var body: some View {
         HStack(alignment: .top, spacing: small ? 8 : 14) {
@@ -387,6 +445,17 @@ struct RoomView: View {
                         if room.running { room.cancel("Cancelada: todo volvió como estaba.") }
                         else { error = room.start() }
                     }.frame(height: small ? 42 : 54)
+                    // Guardar por lugar: el resultado queda con el nombre de la sala para la próxima vez.
+                    HStack(spacing: 6) {
+                        Pill(text: "GUARDAR SALA", style: .outline, size: small ? 11 : 13) {
+                            if room.running { return }
+                            if room.result == nil { error = "Primero medí (o abrí una sala guardada)." }
+                            else { placeName = room.result?.place ?? ""; askPlace = true }
+                        }
+                        Pill(text: "SALAS GUARDADAS", style: .outline, size: small ? 11 : 13) {
+                            if !room.running { showSaved = true }
+                        }
+                    }.frame(height: small ? 32 : 40)
                 }
             }
             .frame(width: small ? 260 : 340)
@@ -433,6 +502,16 @@ struct RoomView: View {
         .alert(item: Binding(get: { error.map { MsgItem(text: $0) } }, set: { if $0 == nil { error = nil } })) { m in
             Alert(title: Text(m.text))
         }
+        .alert("Guardar sala", isPresented: $askPlace) {
+            TextField("Nombre de la sala (ej.: Teatro, bar, fiesta…)", text: $placeName)
+            Button("Guardar") {
+                cutMsg = room.save(place: placeName) ? "✓ Sala guardada" : "Poné un nombre para la sala"
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Se guarda en el dispositivo el resultado que está en pantalla. Si ya hay una sala con ese nombre, se reemplaza.")
+        }
+        .sheet(isPresented: $showSaved) { SavedRoomsView() }
         .confirmationDialog(cutAlert.map { "¿Cortar \(Fmt.hz($0.hz)) en el EQ de \(room.result?.outName ?? "")?" } ?? "",
                             isPresented: Binding(get: { cutAlert != nil }, set: { if !$0 { cutAlert = nil } }), titleVisibility: .visible) {
             Button("OK") {
@@ -590,5 +669,57 @@ private struct RiskGraph: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Salas guardadas: VER muestra el resultado (con sus ✂ CORTAR); ✕ la borra.
+private struct SavedRoomsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var list = Room.shared.saved()
+    @State private var toDelete: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Salas guardadas").font(bf(20)).foregroundColor(C.text)
+                Spacer()
+                Pill(text: "Cerrar", style: .outline, size: 14) { dismiss() }.frame(width: 100, height: 40)
+            }
+            if list.isEmpty {
+                Text("Todavía no hay salas guardadas: medí y tocá GUARDAR SALA.").font(bf(15)).foregroundColor(C.dim)
+            }
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(Array(list.enumerated()), id: \.offset) { _, r in
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.place).font(bf(16)).foregroundColor(C.text).lineLimit(1)
+                                Text("\(Room.dateText(r.at)) · \(r.outName) · " + (r.alerts.isEmpty ? "sin riesgos marcados" : "\(r.alerts.count) alertas"))
+                                    .font(bf(12)).foregroundColor(C.dim).lineLimit(1).minimumScaleFactor(0.7)
+                            }
+                            Spacer()
+                            Pill(text: "VER", active: true, activeColor: C.sends, size: 14) {
+                                Room.shared.show(r)
+                                dismiss()
+                            }.frame(width: 80, height: 38)
+                            Pill(text: "✕", style: .outline, size: 14) { toDelete = r.place }.frame(width: 44, height: 38)
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(height: 56)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(C.surface2))
+                    }
+                }
+            }
+        }
+        .padding(20)
+        .background(C.panel.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .confirmationDialog("¿Borrar la sala \"\(toDelete ?? "")\"?", isPresented: Binding(get: { toDelete != nil }, set: { if !$0 { toDelete = nil } }), titleVisibility: .visible) {
+            Button("Borrar", role: .destructive) {
+                if let p = toDelete { Room.shared.delete(place: p) }
+                toDelete = nil
+                list = Room.shared.saved()
+            }
+        }
     }
 }

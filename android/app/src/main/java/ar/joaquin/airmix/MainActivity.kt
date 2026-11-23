@@ -49,6 +49,9 @@ class MainActivity : Activity() {
     private var pendingExport: String? = null
     private lateinit var rail: LinearLayout
     private lateinit var conn: Btn
+    private lateinit var wifi: WifiView
+    private lateinit var overlay: FrameLayout
+    private var wifiTick = 0
     private lateinit var soloChip: Btn
     private lateinit var clipChip: Btn
     private var shownLinks: Set<Int> = emptySet()
@@ -134,6 +137,10 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         if (locked) return
+        if (::overlay.isInitialized && overlay.visibility == View.VISIBLE) {
+            hideSends()
+            return
+        }
         if (::bigTimer.isInitialized && bigTimer.visibility == View.VISIBLE) {
             bigTimer.visibility = View.GONE
             return
@@ -192,13 +199,24 @@ class MainActivity : Activity() {
                 Clip.reset()
                 for (v in App.meterViews) v.invalidate()
             }
-            showLostBanner(!isConn && everConnected)
+            showLostBanner(!isConn && everConnected && !Demo.on)
             if (isConn) everConnected = true
         }
         if (Room.running) Room.tick(android.os.SystemClock.uptimeMillis())
-        if (connected) {
+        if (Demo.on) {
+            // MODO DEMO: señal simulada en los medidores (y en el RTA si hay un EQ abierto).
+            val now = android.os.SystemClock.uptimeMillis()
+            Demo.tick(c.meters, c.rta, c.rtaWanted, now)
+            Clip.scan(c.meters, now)
+            for (v in App.meterViews) v.invalidate()
+        } else if (connected) {
             Clip.scan(c.meters, android.os.SystemClock.uptimeMillis())
             for (v in App.meterViews) v.invalidate()
+        }
+        // Calidad del wifi: la luz se recalcula cada ~0,5 s.
+        if (++wifiTick >= 15) {
+            wifiTick = 0
+            wifi.update(if (connected) c.rttMs else -1f)
         }
         // Links estéreo: si cambian (desde la app, la consola u otra app), se rearman las capas.
         if (++linkTick >= 15) {
@@ -275,6 +293,8 @@ class MainActivity : Activity() {
     }
 
     private fun onXinfo(name: String, model: String, fw: String) {
+        // La calidad del wifi pide /xinfo cada segundo: si no cambió nada, no se hace nada.
+        if (name == App.mixerName && fw == App.firmware && model == App.console.model) return
         App.mixerName = name
         App.firmware = fw
         prefs().edit().putString("model", model).apply()
@@ -291,7 +311,10 @@ class MainActivity : Activity() {
 
     private fun updateConn() {
         val ip = App.client?.host?.hostAddress ?: ""
-        if (connected) {
+        if (Demo.on) {
+            conn.text = "▶ MODO DEMO  ✕"
+            conn.setTextColor(C.YELLOW)
+        } else if (connected) {
             conn.text = "●  ${App.console.model}  $ip"
             conn.setTextColor(C.GREEN)
         } else {
@@ -363,7 +386,19 @@ class MainActivity : Activity() {
         conn.maxLines = 1
         conn.ellipsize = android.text.TextUtils.TruncateAt.END
         conn.setPadding(dp(8), 0, dp(8), 0)
-        conn.setOnClickListener { showConnect() }
+        conn.setOnClickListener { if (Demo.on) confirmStopDemo() else showConnect() }
+        // Calidad del wifi: loguito + luz de rojo a verde según el tiempo de respuesta de la consola.
+        wifi = WifiView(this)
+        wifi.setOnClickListener {
+            val rtt = App.client?.rttMs ?: -1f
+            val msg = when {
+                Demo.on -> "Modo demo: no hay consola."
+                !connected || rtt < 0f -> "Sin datos del wifi: no hay conexión con la consola."
+                else -> "La consola responde en ${rtt.toInt()} ms (verde ≤ ${WifiView.GOOD_MS.toInt()} ms, rojo ≥ ${WifiView.BAD_MS.toInt()} ms o respuestas perdidas)."
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+        top.addView(wifi, lp(dp(sz(40, 32)), dp(sz(40, 34))).m(r = dp(sz(6, 3))))
         top.addView(conn, lp(dp(sz(240, 150)), dp(sz(40, 34))))
         root.addView(top, lp(MATCH, dp(sz(60, 46))))
         updateConn()
@@ -400,6 +435,14 @@ class MainActivity : Activity() {
         lostBanner.visibility = View.GONE
         lostBanner.elevation = dp(16).toFloat()
         frame.addView(lostBanner, FrameLayout.LayoutParams(MATCH, dp(sz(56, 42)), Gravity.TOP).also { it.topMargin = dp(sz(60, 46)) })
+        // Envíos de una tira (mantener apretado el nombre): panel encima de todo; tocar afuera lo cierra.
+        overlay = FrameLayout(this)
+        overlay.setBackgroundColor(Color.argb(110, 0, 0, 0))
+        overlay.visibility = View.GONE
+        overlay.elevation = dp(20).toFloat()
+        overlay.setOnClickListener { hideSends() }
+        frame.addView(overlay, FrameLayout.LayoutParams(MATCH, MATCH))
+        StripSends.onShow = { s -> showSends(s) }
         return frame
     }
 
@@ -418,6 +461,24 @@ class MainActivity : Activity() {
 
         @android.annotation.SuppressLint("ClickableViewAccessibility")
         override fun onTouchEvent(e: android.view.MotionEvent): Boolean = locked
+    }
+
+    private fun showSends(s: Strip) {
+        if (locked) return
+        val n = StripSends.targets(s).size
+        if (n == 0) return
+        overlay.removeAllViews()
+        val colW = dp(sz(82, 66))
+        val maxW = resources.displayMetrics.widthPixels - dp(32)
+        val w = minOf(n * colW + dp(24), maxW).coerceAtLeast(dp(220))
+        val h = dp(sz(380, 280)).coerceAtMost(resources.displayMetrics.heightPixels - dp(sz(80, 56)))
+        overlay.addView(stripSendsPanel(s), FrameLayout.LayoutParams(w, h, Gravity.CENTER))
+        overlay.visibility = View.VISIBLE
+    }
+
+    private fun hideSends() {
+        overlay.visibility = View.GONE
+        overlay.removeAllViews()
     }
 
     private fun showLostBanner(show: Boolean) {
@@ -474,6 +535,18 @@ class MainActivity : Activity() {
                 Room.demo()
                 tab = Tab.ROOM
                 render()
+            }
+            "demo" -> {
+                bigTimer.visibility = View.GONE
+                locked = false
+                lockBtn.active = false
+                lockBtn.text = "🔓"
+                startDemo()
+            }
+            "envios" -> {
+                bigTimer.visibility = View.GONE
+                if (!Demo.on) startDemo()
+                showSends(Strip(Kind.CH, 1))
             }
             "corte" -> {
                 bigTimer.visibility = View.GONE
@@ -613,6 +686,7 @@ class MainActivity : Activity() {
     }
 
     private fun render() {
+        if (::overlay.isInitialized && overlay.visibility == View.VISIBLE) hideSends()
         content.removeAllViews()
         for ((t, b) in tabBtns) b.active = t == tab
         for (i in layerBtns.indices) layerBtns[i].active = tab == Tab.MIX && i == layerIdx
@@ -1414,7 +1488,14 @@ class MainActivity : Activity() {
         val about = Btn(this, "ACERCA DE", BtnStyle.OUTLINE, 13f)
         about.setTextColor(C.TEXT_DIM)
         about.setOnClickListener { showAbout() }
-        left.addView(about, lp(dp(140), dp(38)).m(t = dp(10)))
+        val bottom = row()
+        bottom.addView(about, lp(dp(140), dp(38)))
+        // MODO DEMO: acá atrás a propósito (no en la pantalla de conexión).
+        val demo = Btn(this, if (Demo.on) "SALIR DEL DEMO" else "▶ MODO DEMO", BtnStyle.OUTLINE, 13f)
+        demo.setTextColor(if (Demo.on) C.YELLOW else C.TEXT_DIM)
+        demo.setOnClickListener { if (Demo.on) confirmStopDemo() else confirmStartDemo() }
+        bottom.addView(demo, lp(dp(160), dp(38)).m(l = dp(10)))
+        left.addView(bottom, lp(MATCH, WRAP).m(t = dp(10)))
         Scenes.onStatus = { msg -> status.text = msg }
         Scenes.onSaveReady = { n, text -> onSceneRead(n, text) }
         root.addView(left, lp(0, MATCH, 1f).m(r = dp(14)))
@@ -1479,6 +1560,56 @@ class MainActivity : Activity() {
         loadCard.addView(scroll(list), lp(MATCH, 0, 1f).m(t = dp(6)))
         root.addView(loadCard, lp(0, MATCH, 1.3f))
         return root
+    }
+
+    // ------------------------------------------------------------------ MODO DEMO
+
+    private fun confirmStartDemo() {
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Modo demo")
+            .setMessage("Simula una XR12 para probar la app sin consola: nombres, faders, mutes, envíos, EQ, efectos y medidores que se mueven.\n\nMientras está prendido no sale nada por la red. Para salir, tocá \"MODO DEMO ✕\" arriba a la derecha.")
+            .setPositiveButton("Entrar") { _, _ -> startDemo() }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
+    }
+
+    private fun confirmStopDemo() {
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setMessage("¿Salir del modo demo? Se vuelve a la consola real (si está en la red).")
+            .setPositiveButton("Salir del demo") { _, _ -> stopDemo() }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
+    }
+
+    private fun startDemo() {
+        everConnected = false
+        showLostBanner(false)
+        Demo.start()
+        sends = SendTarget.MAIN
+        detail = null
+        tab = Tab.MIX
+        layerIdx = 0
+        watchLinks()
+        rebuildRail()
+        render()
+        updateConn()
+    }
+
+    private fun stopDemo() {
+        Demo.stop()
+        prefs().getString("model", null)?.let { App.applyModel(it) }
+        Clip.reset()
+        sends = SendTarget.MAIN
+        detail = null
+        layerIdx = 0
+        connected = false
+        watchLinks()
+        rebuildRail()
+        render()
+        updateConn()
+        App.store.requeryObserved()
     }
 
     /** ACERCA DE: autoría, contacto y créditos. */

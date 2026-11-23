@@ -41,7 +41,7 @@ object Room {
 
     class Result(
         val outBus: Int, val outName: String, val score: FloatArray, val spectrum: FloatArray,
-        val alerts: List<Alert>, val aborted: Boolean, val at: Long
+        val alerts: List<Alert>, val aborted: Boolean, val at: Long, val place: String = ""
     )
 
     /** Canales elegidos como micrófonos (índice = canal - 1). userPicked: ya no se tildan solos. */
@@ -267,6 +267,102 @@ object Room {
         return Result(outBus, outName(outBus), score, spec, alerts, aborted, System.currentTimeMillis())
     }
 
+    // ------------------------------------------------------------------ salas guardadas
+
+    /** Hasta cuántas salas se guardan (la más vieja se va). */
+    const val MAX_SAVED = 30
+    private const val KEY = "rooms"
+
+    /** Salas guardadas, la más nueva primero (mismo formato JSON que iOS). */
+    fun saved(p: android.content.SharedPreferences): List<Result> {
+        val out = ArrayList<Result>()
+        try {
+            val arr = org.json.JSONArray(p.getString(KEY, "[]") ?: "[]")
+            for (i in 0 until arr.length()) out.add(fromJson(arr.getJSONObject(i)))
+        } catch (_: Exception) {}
+        return out
+    }
+
+    /** Guarda el resultado que está en pantalla con el nombre de la sala (si ya había una con ese nombre, la reemplaza). */
+    fun save(p: android.content.SharedPreferences, place: String): Boolean {
+        val r = result ?: return false
+        val name = place.trim().take(40)
+        if (name.isEmpty()) return false
+        val named = Result(r.outBus, r.outName, r.score, r.spectrum, r.alerts, r.aborted, r.at, name)
+        val list = saved(p).filter { !it.place.equals(name, ignoreCase = true) }.toMutableList()
+        list.add(0, named)
+        while (list.size > MAX_SAVED) list.removeAt(list.size - 1)
+        write(p, list)
+        result = named
+        status = "Guardada como \"$name\"."
+        onChange?.invoke()
+        return true
+    }
+
+    fun delete(p: android.content.SharedPreferences, place: String) {
+        write(p, saved(p).filter { it.place != place })
+    }
+
+    /** Muestra una sala guardada (para comparar o para cortar de nuevo lo que marcó). */
+    fun show(r: Result) {
+        if (running) return
+        result = r
+        outBus = r.outBus.coerceIn(0, App.console.buses)
+        val d = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(java.util.Date(r.at))
+        status = "Sala guardada: ${r.place} · $d · ${r.outName}"
+        onChange?.invoke()
+    }
+
+    private fun write(p: android.content.SharedPreferences, list: List<Result>) {
+        val arr = org.json.JSONArray()
+        for (r in list) arr.put(toJson(r))
+        p.edit().putString(KEY, arr.toString()).apply()
+    }
+
+    private fun toJson(r: Result): org.json.JSONObject {
+        val o = org.json.JSONObject()
+        o.put("place", r.place)
+        o.put("outBus", r.outBus)
+        o.put("outName", r.outName)
+        o.put("at", r.at)
+        o.put("aborted", r.aborted)
+        val sc = org.json.JSONArray()
+        for (v in r.score) sc.put(Math.round(v * 10f) / 10.0)
+        o.put("score", sc)
+        val sp = org.json.JSONArray()
+        for (v in r.spectrum) sp.put(Math.round(v * 10f) / 10.0)
+        o.put("spectrum", sp)
+        val al = org.json.JSONArray()
+        for (a in r.alerts) {
+            val x = org.json.JSONObject()
+            x.put("hz", a.hz.toDouble())
+            x.put("high", a.high)
+            x.put("chName", a.chName)
+            x.put("db", a.db.toDouble())
+            x.put("note", a.note)
+            al.put(x)
+        }
+        o.put("alerts", al)
+        return o
+    }
+
+    private fun fromJson(o: org.json.JSONObject): Result {
+        val sc = o.getJSONArray("score")
+        val sp = o.getJSONArray("spectrum")
+        val score = FloatArray(BINS) { if (it < sc.length()) sc.getDouble(it).toFloat() else -100f }
+        val spec = FloatArray(BINS) { if (it < sp.length()) sp.getDouble(it).toFloat() else -100f }
+        val al = o.optJSONArray("alerts") ?: org.json.JSONArray()
+        val alerts = ArrayList<Alert>()
+        for (i in 0 until al.length()) {
+            val x = al.getJSONObject(i)
+            alerts.add(Alert(x.getDouble("hz").toFloat(), x.optBoolean("high"), x.optString("chName"), x.optDouble("db", 0.0).toFloat(), x.optString("note")))
+        }
+        return Result(
+            o.optInt("outBus"), o.optString("outName", "MAIN LR"), score, spec, alerts,
+            o.optBoolean("aborted"), o.optLong("at"), o.optString("place")
+        )
+    }
+
     /** Para las capturas: un resultado de ejemplo. */
     internal fun demo() {
         val score = FloatArray(BINS) { 0.4f * Math.sin(it / 5.0).toFloat() }
@@ -278,8 +374,8 @@ object Room {
             Alert(binHz(73), true, "VOZ GARKO", 5.6f, ""),
             Alert(binHz(55), false, "VOZ PALMI", 2.7f, ""),
             Alert(binHz(38), false, "", 0f, "pico en la sala")
-        ), false, System.currentTimeMillis())
-        status = "Listo. Todo volvió como estaba."
+        ), false, System.currentTimeMillis(), "SALA DE PRUEBA")
+        status = "Sala guardada: SALA DE PRUEBA · MAIN LR"
         mics[0] = true; mics[1] = true; mics[2] = true
         userPicked = true
     }
