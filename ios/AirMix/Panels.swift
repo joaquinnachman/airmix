@@ -816,7 +816,7 @@ struct StripSendsPanel: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
                     ForEach(StripSends.targets(strip), id: \.label) { t in
-                        SendColumn(strip: strip, target: t, small: small)
+                        StripSendColumn(strip: strip, target: t, small: small)
                             .frame(width: small ? 62 : 78)
                     }
                 }
@@ -828,7 +828,7 @@ struct StripSendsPanel: View {
     }
 }
 
-private struct SendColumn: View {
+private struct StripSendColumn: View {
     let strip: Strip
     let target: SendTarget
     let small: Bool
