@@ -25,20 +25,7 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 
 ## Próxima versión
 
-1. **MODO DEMO sin consola** (Joaquín, 22/11/2026).
-   - Se ofrece en ESCENAS (no en la pantalla de conexión, "para que no esté tan adelante").
-   - Simula una XR12: nombres de canales, faders, mutes, envíos, EQ, efectos y medidores que se mueven (señal simulada, sin asignaciones en el camino caliente).
-   - Nada sale por la red mientras está en demo; cartel claro "MODO DEMO" en la barra de arriba y botón para salir.
-   - SALA, escenas a la consola y el aviso de actualización se comportan como sin conexión.
-2. **Calidad del wifi en la barra de arriba** (Joaquín, 22/11/2026).
-   - Solo el loguito de wifi con una luz al lado que va de rojo a verde **en gradiente** (no tres colores fijos).
-   - Color según el tiempo de respuesta de la consola (un pedido liviano que la consola siempre contesta, por ejemplo `/xinfo`): verde ≤ 20 ms, rojo ≥ 300 ms o respuestas perdidas, interpolado en el medio y suavizado.
-   - Va al lado de lo de conexión; en celular revisar que entre.
-3. **Mantener apretado un fader → envíos de ese canal** (Joaquín, 22/11/2026).
-   - Mini panel con los envíos del canal a cada bus (con nombre y color del bus) y fader para moverlos ahí mismo.
-   - Ojo con el fader del MAIN protegido (mantener 0,6 s ya lo agarra): este gesto es para tiras de canal/AUX/FX RTN; elegir el gesto (por ejemplo, mantener sobre el nombre o el medidor de la tira) para que no choque con mover el fader.
-   - Se cierra tocando afuera.
-4. **SALA: el ruido rosa tiene que salir de la consola al MAIN LR, no del parlante de la tablet** (Joaquín, 17/11/2026).
+1. **SALA: el ruido rosa tiene que salir de la consola al MAIN LR, no del parlante de la tablet** (Joaquín, 17/11/2026).
    - Joaquín: "la generación de ruido rosa sea desde la app hacia el main LR, es una función que tienen otras apps"; el parlante de la tablet "filtra y es malísimo".
    - Después él mide con alguno de los micrófonos.
    - **Límite técnico:** por wifi (OSC) la app solo manda órdenes, no audio. "Mandarlo desde la app" = prender el generador interno de la consola (oscilador / ruido rosa) por OSC y rutearlo al MAIN LR.
@@ -50,9 +37,7 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
      - en SALA, botón RUIDO ROSA → MAIN LR, con nivel (arranca bajo, por ejemplo -30 dB) y apagado automático al salir de SALA, al perder conexión o a los 60 s;
      - la medición usa ese ruido en vez del parlante, y el parlante de la tablet se saca.
    - **Si no existe:** avisarle a Joaquín con las alternativas, sin implementar nada.
-5. **SALA: guardar por lugar** (lo opcional del ítem SALA, quedó para después de 0.5.5).
-   - Guardar el resultado con el nombre de la sala para la próxima vez.
-6. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+2. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
    - `android/airmix-debug.keystore` está en el historial público.
    - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
    - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
@@ -62,6 +47,12 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 2. **Salidas físicas:** qué sale por AUX OUT 1/2 de la XR12 y desde qué punto.
 3. **Presets de canal:** guardar la configuración de un canal (EQ, compresor, gate…) y cargarla en otro.
 4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
+## Para probar en la XR12 (0.5.7)
+- **Calidad del wifi:** con la consola conectada, la luz al lado del loguito de wifi tiene que estar verde (tocala: muestra los ms). Alejarse con la tablet o cargar la red y ver que vaya hacia amarillo/rojo. Sin consola: gris.
+- **Envíos manteniendo apretado:** mantener apretado el nombre de un canal → panel con MON 1/2 y FX 1-4; mover un envío y ver que cambie en la consola (y en X-Air Edit). Tocar afuera cierra. Confirmar que mover el fader del canal no abre el panel.
+- **MODO DEMO:** ESCENAS → ▶ MODO DEMO con la consola conectada: no tiene que cambiar nada en la consola mientras movés cosas. Al salir (MODO DEMO ✕ arriba), vuelve a la XR12 real con sus valores.
+- **SALA guardar por lugar:** medir, GUARDAR SALA con un nombre, salir de la app, volver y abrirla en SALAS GUARDADAS.
+
 ## Para probar en la XR12 (0.5.5)
 - **Fader del MAIN:** que un roce no lo mueva, que al mantener ~0,6 s se agarre y se mueva sin saltos, y que el doble toque no haga nada.
 - **SALA** (a volumen moderado, micrófonos en su lugar, tablet apoyada cerca):
@@ -94,6 +85,22 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 - **LINK STEREO:** probar que la consola copia fader, mute y EQ al par, y que el link hecho desde la consola o desde otra app aparece solo en AirMix.
 - **Escenas .scn:** el cargador no aplica el bloque `config`, así que el link de canales puede no restaurarse al cargar una escena.
 - **Chip SOLO:** usa `/-stat/solo`. Si la XR12 no lo manda, el chip no aparece nunca (CLR SOLO sigue en MEDIDORES igual).
+
+## Hecho en 0.5.7 (23/11/2026)
+- **MODO DEMO sin consola** (Demo.kt / Demo.swift): botón ▶ MODO DEMO en ESCENAS, al lado de ACERCA DE.
+  - XR12 simulada: nombres, colores, faders, mutes, paneos, envíos a MON 1/2 y FX, EQ, efectos; lo que no está en la tabla toma un valor neutro.
+  - Medidores (y RTA del EQ) con señal simulada desde el tick de 30 fps, sin asignaciones.
+  - MixerClient.demo descarta todo envío y lo que llega de la red; arriba dice "▶ MODO DEMO ✕" (tocarlo = salir).
+  - SALA, escenas a la consola y el aviso de actualización: como sin conexión. Sin franja roja de corte al entrar.
+- **Calidad del wifi en la barra de arriba** (WifiView / WifiQualityView): loguito de wifi + luz en gradiente verde→amarillo→rojo.
+  - /xinfo cada 1 s mientras hay conexión; respuesta suavizada (70/30); sin respuesta en 1 s = 400 ms.
+  - Verde ≤ 20 ms, rojo ≥ 300 ms; gris sin conexión o en demo. Tocarla muestra los ms.
+- **Mantener apretado el nombre (o el título) de una tira → envíos** (StripSends): canales, AUX y FX RTN.
+  - Panel con un fader por bus (nombre y color del bus) y por FX (tipo de efecto); se cierra tocando afuera (o VOLVER en Android).
+  - El gesto va sobre el nombre/título, no sobre el fader: no choca con el fader protegido del MAIN.
+- **SALA: guardar por lugar:** GUARDAR SALA (nombre; si existe, se reemplaza) y SALAS GUARDADAS (VER / BORRAR), hasta 30, en el dispositivo.
+- Capturas nuevas en CI: demo y envios.
+- **A confirmar:** el ping de calidad usa /xinfo (la consola siempre lo contesta); si Joaquín nota algo raro en la conexión, se puede espaciar.
 
 ## Hecho en 0.5.6 (20/11/2026) — revisión X32 antes del show del sábado
 - ENTRADA X32 = lista real de /ch/NN/config/source (0-64).
