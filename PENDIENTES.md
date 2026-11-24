@@ -20,7 +20,7 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 - Del 12/11/2026, no elegidas: escena por tema, memorias A/B/C/D, aviso grande de envíos, ring out guiado, registro del show, plantilla GyP, modo escenario oscuro, segunda pantalla, prueba de línea paso a paso.
 - Del 01/11/2026, no elegidas: automix, PRE/POST de envíos, safes al cargar escenas, GEQ en buses/main, auriculares/solo.
 - Respaldo antes de cargar escena, mute groups, vista "mi monitor" para el dúo, medidor grande del MAIN: propuestos el 31/10/2026, Joaquín no los eligió.
-- Del 22/11/2026, no elegidas: conexión sola a la última consola, aviso de canal con señal muteado, chequeo antes del show, comparar escena contra la consola, escenas en Google Drive, botón MUTE FX, compatibilidad con Behringer Wing.
+- Del 22/11/2026, no elegidas: conexión sola a la última consola, aviso de canal con señal muteado, chequeo antes del show, comparar escena contra la consola, escenas en Google Drive, botón MUTE FX (en realidad ya existía en el riel; se queda como está), compatibilidad con Behringer Wing.
 - **Compatibilidad con otras marcas** (Soundcraft, Yamaha, Allen & Heath, etc.) ni un clon "Bis". Joaquín lo descartó el 22/10/2026: es demasiado trabajo. No volver a proponerlo.
 
 ## Próxima versión
