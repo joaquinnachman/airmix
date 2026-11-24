@@ -25,7 +25,24 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 
 ## Próxima versión
 
-1. **SALA: el ruido rosa tiene que salir de la consola al MAIN LR, no del parlante de la tablet** (Joaquín, 17/11/2026).
+1. **Celular: MEZCLA más acorde a la pantalla chica** (Joaquín, 24/11/2026, con captura de su celular en horizontal, 2340×1080).
+   - Joaquín: "Para tablet están perfectos los tamaños, pero para celu creo que podría ser mejor… capaz achicando botones". **La tablet no se toca.**
+   - Lo que se ve mal (su captura y también la captura del CI `android-celular-1-mezcla`):
+     - el recorrido del fader es corto: la parte útil ocupa menos de un tercio del alto; botones, títulos y barras se comen el resto;
+     - el riel izquierdo no entra: "BUSES" queda cortado detrás de NOTAS y no se ven FX RTN/BUSES/FAVS sin scroll; NOTAS y MUTE FX son enormes;
+     - en cada tira el nombre aparece dos veces (rótulo "CH 01" arriba + botón de nombre "CH 01");
+     - el cap del fader tapa las marcas de la escala ("-60" se lee "-6(", el "0" del MAIN tapado);
+     - la fila "CH 1-8 · TAP · SENDS ON FADER" ocupa una fila entera;
+     - pestañas y el chip "● SIN CONEXIÓN" muy anchos.
+   - Objetivo en celular: **el recorrido del fader ≥ 50 % del alto de la pantalla**, sin textos cortados ni encimados.
+   - Ideas para lograrlo (todo con `sz(…)` / `Layout.compact`, Android e iOS):
+     - sacar la fila de página: TAP y SENDS ON FADER pasan a la barra de arriba (más chicos) o al pie del riel; el nombre de la capa ya está marcado en el riel;
+     - tira: un solo nombre (el botón de color; el número "CH 01" chiquito adentro o al costado), paneo + S + valor en una sola fila, MUTE más bajo, cap del fader más chico, la escala sin quedar debajo del cap;
+     - riel: más angosto, letra más chica, todas las capas visibles; reloj SHOW, NOTAS (✎) y MUTE FX más chicos (una línea o ícono);
+     - barra de arriba: pestañas con letra más chica, chip de conexión corto (punto + "SIN CONEX." / nombre corto), candado y wifi más chicos.
+   - **Ojo:** en el celular de Joaquín se ve distinto que en el CI (por ejemplo, ahí sí aparecen los números de la escala); probablemente por el tamaño de letra/pantalla del sistema. Que el diseño compacto aguante letra del sistema grande (probar en el CI con `RuntimeEnvironment.setFontScale(1.3f)` además de 1.0, y una captura extra a 2340×1080).
+   - Revisar también en celular el detalle de canal, EFECTOS, MEDIDORES, SALA, ESCENAS y el panel de envíos, que usan la misma barra de arriba.
+2. **SALA: el ruido rosa tiene que salir de la consola al MAIN LR, no del parlante de la tablet** (Joaquín, 17/11/2026).
    - Joaquín: "la generación de ruido rosa sea desde la app hacia el main LR, es una función que tienen otras apps"; el parlante de la tablet "filtra y es malísimo".
    - Después él mide con alguno de los micrófonos.
    - **Límite técnico:** por wifi (OSC) la app solo manda órdenes, no audio. "Mandarlo desde la app" = prender el generador interno de la consola (oscilador / ruido rosa) por OSC y rutearlo al MAIN LR.
@@ -37,7 +54,7 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
      - en SALA, botón RUIDO ROSA → MAIN LR, con nivel (arranca bajo, por ejemplo -30 dB) y apagado automático al salir de SALA, al perder conexión o a los 60 s;
      - la medición usa ese ruido en vez del parlante, y el parlante de la tablet se saca.
    - **Si no existe:** avisarle a Joaquín con las alternativas, sin implementar nada.
-2. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+3. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
    - `android/airmix-debug.keystore` está en el historial público.
    - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
    - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
