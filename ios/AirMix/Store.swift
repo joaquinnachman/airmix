@@ -134,6 +134,17 @@ final class Core: ObservableObject {
     @Published var lost = false
     /// MODO DEMO prendido (simula una XR12, no sale nada por la red).
     @Published private(set) var demo = false
+    /// Nombre de la consola (/xinfo).
+    @Published private(set) var mixerName = ""
+    /// Modo de uso: 0 = CONTROL TOTAL; n ≥ 1 = MÚSICO en el monitor (bus) n. Igual que Mode de Android.
+    @Published var musicianBus = 0
+    /// Pantalla de inicio: 0 = oculta, 1 = conexión, 2 = elegir modo. Siempre arranca en 1.
+    @Published var startPage = 1
+    /// Se tocó CONECTAR en la pantalla de inicio y se espera la respuesta de la consola.
+    @Published private(set) var waiting = false
+    @Published var startError = ""
+    private var waitingSince: TimeInterval = 0
+    private var discoverTick = 0
     private var everConnected = false
     private var linkTick = 0
     private var watched = Set<String>()
@@ -189,6 +200,22 @@ final class Core: ObservableObject {
         return true
     }
 
+    /// Conectar desde la pantalla de inicio: cuando la consola responde, pasa a elegir modo.
+    func startConnect(ip: String, port: Int, model: String?) {
+        if demo { stopDemo() }
+        if let m = model {
+            UserDefaults.standard.set(m, forKey: "model")
+            applyModel(m)
+        }
+        if connect(ip: ip, port: port) {
+            waiting = true
+            waitingSince = Date().timeIntervalSince1970
+            startError = ""
+        } else {
+            startError = "IP inválida"
+        }
+    }
+
     /// MODO DEMO: borra lo que había de la consola real y carga la XR12 de ejemplo.
     func startDemo() {
         everConnected = false
@@ -196,6 +223,7 @@ final class Core: ObservableObject {
         Demo.on = true
         client.demo = true
         demo = true
+        musicianBus = 0
         Store.shared.resetValues()
         applyModel(Demo.model)
         layoutVersion += 1
@@ -216,6 +244,8 @@ final class Core: ObservableObject {
         layoutVersion += 1
         connected = false
         Store.shared.requeryWanted()
+        musicianBus = 0
+        startPage = 1
     }
 
     private func tick() {
@@ -226,6 +256,7 @@ final class Core: ObservableObject {
             }
             if m.address == "/xinfo" {
                 // La calidad del wifi pide /xinfo cada segundo: si no cambió nada, no se toca nada (ni se redibuja).
+                if m.args.count >= 2 && m.args[1].stringValue != mixerName { mixerName = m.args[1].stringValue }
                 if m.args.count >= 4 && (m.args[3].stringValue != firmware || m.args[2].stringValue != console.model) {
                     firmware = m.args[3].stringValue
                     UserDefaults.standard.set(m.args[2].stringValue, forKey: "model")
@@ -248,6 +279,20 @@ final class Core: ObservableObject {
         }
         if Room.shared.running { Room.shared.tick(Date().timeIntervalSince1970) }
         let c = client.isConnected()
+        // Pantalla de inicio: busca consolas cada 3 s y, si se tocó CONECTAR, espera la respuesta (6 s como mucho).
+        if startPage == 1 {
+            discoverTick += 1
+            if discoverTick >= 90 { discoverTick = 0; client.discover() }
+        }
+        if waiting {
+            if c {
+                waiting = false
+                if startPage == 1 { startPage = 2 }
+            } else if Date().timeIntervalSince1970 - waitingSince > 6 {
+                waiting = false
+                startError = "No responde. ¿El dispositivo está en el wifi de la consola?"
+            }
+        }
         if demo {
             // MODO DEMO: señal simulada en los medidores (y en el RTA si hay un EQ abierto).
             let now = Date().timeIntervalSince1970

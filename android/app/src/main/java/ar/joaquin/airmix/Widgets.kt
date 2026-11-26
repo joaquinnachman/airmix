@@ -75,7 +75,7 @@ class FaderView(ctx: Context) : View(ctx) {
         }
     }
 
-    private fun capH() = dpf(30f)
+    private fun capH() = if (Layout.compact) dpf(24f) else dpf(30f)
     private fun top() = capH() / 2f + dpf(6f)
     private fun travel() = height - capH() - dpf(12f)
 
@@ -120,8 +120,8 @@ class FaderView(ctx: Context) : View(ctx) {
             c.drawRoundRect(r, tw / 2f, tw / 2f, p)
         }
 
-        // cap
-        val hw = minOf(dpf(24f), width * 0.3f)
+        // cap (en celular, más angosto: no tapa los números de la escala)
+        val hw = if (Layout.compact) minOf(dpf(15f), width * 0.22f) else minOf(dpf(24f), width * 0.3f)
         val ch = capH()
         p.color = Color.BLACK
         p.alpha = 90
@@ -616,5 +616,71 @@ class WifiView(ctx: Context) : View(ctx) {
         val lx = width - lr - dpf(2f)
         p.color = light
         c.drawCircle(lx, h / 2f, lr, p)
+    }
+}
+
+/**
+ * Medidor de reducción de ganancia (GR) del gate o del compresor, de arriba hacia abajo (0 a 24 dB).
+ * Lee App.client.gr (X Air /meters/6) desde el tick común; sin asignaciones en onDraw.
+ */
+class GrMeterView(ctx: Context, private val index: Int, private val color: Int) : View(ctx) {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val r = RectF()
+
+    companion object {
+        private val NUMS = Array(25) { "-$it" }
+        private const val MAX_DB = 24f
+
+        /** Índice en /meters/6: 0-15 gate de canal, 16-31 compresor de canal, 32-37 compresor de bus, 38 main. */
+        fun index(prefix: String, gate: Boolean): Int {
+            if (App.console.isX32) return -1
+            val n = prefix.substringAfterLast('/').toIntOrNull()
+            return when {
+                prefix.startsWith("/ch/") && n != null && n in 1..16 -> if (gate) n - 1 else 15 + n
+                prefix.startsWith("/bus/") && n != null && n in 1..6 && !gate -> 31 + n
+                prefix == "/lr" && !gate -> 38
+                else -> -1
+            }
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        App.meterViews.add(this)
+        App.client?.setGr(true)
+    }
+
+    override fun onDetachedFromWindow() {
+        App.meterViews.remove(this)
+        App.client?.setGr(false)
+        super.onDetachedFromWindow()
+    }
+
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val top = dpf(22f)
+        val bot = h - dpf(22f)
+        p.textAlign = Paint.Align.CENTER
+        p.typeface = FONT
+        p.textSize = dpf(12f)
+        p.color = C.TEXT_DIM
+        c.drawText("GR", w / 2f, dpf(15f), p)
+        p.color = C.METER_BG
+        r.set(w / 2f - dpf(9f), top, w / 2f + dpf(9f), bot)
+        c.drawRoundRect(r, dpf(4f), dpf(4f), p)
+        val v = (App.client?.gr?.getOrNull(index) ?: 0f).coerceIn(0f, MAX_DB)
+        if (v > 0.2f) {
+            p.color = color
+            r.set(w / 2f - dpf(9f), top, w / 2f + dpf(9f), top + (bot - top) * v / MAX_DB)
+            c.drawRoundRect(r, dpf(4f), dpf(4f), p)
+        }
+        p.color = C.TICK
+        for (d in intArrayOf(6, 12, 18)) {
+            val y = top + (bot - top) * d / MAX_DB
+            c.drawRect(w / 2f - dpf(13f), y - dpf(0.5f), w / 2f - dpf(10f), y + dpf(0.5f), p)
+        }
+        p.color = if (v > 0.2f) color else C.TEXT_DIM
+        c.drawText(NUMS[v.toInt().coerceIn(0, 24)], w / 2f, h - dpf(5f), p)
     }
 }

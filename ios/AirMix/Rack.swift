@@ -147,6 +147,9 @@ struct RackUnit: View {
     let n: Int
     let small: Bool
     @ObservedObject var type: Param
+    @State private var naming = false
+    @State private var presetName = ""
+    @State private var msg: String?
 
     init(n: Int, small: Bool) {
         self.n = n
@@ -176,8 +179,36 @@ struct RackUnit: View {
                         .background(RoundedRectangle(cornerRadius: 6).fill(RackColors.lcdBg))
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(RackColors.lcdEdge))
                 }
+                // PRESETS de efecto: guardar el efecto tal como está y recuperarlo sin cargar la escena.
+                Menu {
+                    Button("★ Guardar FX \(n) como preset…") { naming = true }
+                    let list = Presets.fxPresets().filter { $0.type >= 0 && $0.type < Fx.typeOptions(n).count }
+                    ForEach(list) { p in
+                        Button("Cargar: \(p.name)  ·  \(p.kind)") { loadPreset(p) }
+                    }
+                    if !list.isEmpty {
+                        Menu("Borrar un preset…") {
+                            ForEach(list) { p in Button(p.name, role: .destructive) { Presets.deleteFx(p) } }
+                        }
+                    }
+                } label: {
+                    Text("★ PRESETS").font(bf(small ? 10 : 12)).foregroundColor(C.text).lineLimit(1)
+                        .frame(maxWidth: .infinity).frame(height: small ? 24 : 30)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(C.line))
+                }
             }
             .frame(width: small ? 150 : 200)
+            .alert("Guardar FX \(n) como preset", isPresented: $naming) {
+                TextField("Ej.: REVERB VOZ", text: $presetName)
+                Button("Guardar") {
+                    let name = presetName.trimmingCharacters(in: .whitespaces).isEmpty ? "FX \(n)" : presetName.trimmingCharacters(in: .whitespaces)
+                    Presets.saveFx(n, name: String(name.prefix(32))) { k in
+                        msg = k > 0 ? "★ Preset \"\(name)\" guardado" : "No se pudo leer el efecto: ¿está conectada la consola?"
+                    }
+                    presetName = ""
+                }
+                Button("Cancelar", role: .cancel) {}
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
                     ForEach(0..<pars.count, id: \.self) { i in
@@ -197,6 +228,24 @@ struct RackUnit: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 26 + 12)
         .background(RackFace())
+        .overlay(alignment: .bottomLeading) {
+            if let m = msg {
+                Text(m).font(bf(12)).foregroundColor(C.text).padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(C.surface2))
+                    .padding(.leading, 40)
+                    .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { if msg == m { msg = nil } } }
+            }
+        }
+    }
+
+    private func loadPreset(_ p: Presets.Preset) {
+        Presets.applyFx(p, n)
+        // Los parámetros cambian con el tipo: se vuelven a pedir.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            for k in 1...64 { Store.shared.forget("/fx/\(n)/par/\(Fmt.two(k))") }
+            for k in 1...16 { Core.shared.client.query("/fx/\(n)/par/\(Fmt.two(k))") }
+        }
+        msg = "✓ FX \(n): \(p.name)"
     }
 
     /// Cambia el tipo y vuelve a pedir los parámetros (cambian con el tipo).

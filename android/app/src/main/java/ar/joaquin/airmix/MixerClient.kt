@@ -29,6 +29,7 @@ class MixerClient(private val ctx: Context) {
         const val PORT_X32 = 10023
         const val METER_COUNT = 96
         const val RTA_BINS = 100
+        const val GR_COUNT = 39
         const val PING_EVERY_MS = 1000L
         const val LOST_MS = 400f
     }
@@ -69,6 +70,14 @@ class MixerClient(private val ctx: Context) {
 
     /** RTA de la consola: 100 bandas de 20 Hz a 20 kHz, en dB (X Air /meters/4, X32 /meters/15). */
     val rta = FloatArray(RTA_BINS) { -100f }
+    /**
+     * Reducción de ganancia (X Air /meters/6, dB): 16 gate de canal, 16 compresor de canal, 6 compresor de bus,
+     * 1 compresor del main. Solo se pide mientras hay un GATE o un COMPRESOR en pantalla.
+     */
+    val gr = FloatArray(GR_COUNT)
+    @Volatile var grWanted = false
+        private set
+
     /** Solo se pide el RTA mientras hay un EQ en pantalla. */
     @Volatile var rtaWanted = false
         private set
@@ -78,6 +87,7 @@ class MixerClient(private val ctx: Context) {
     private val metersSubX32a = Osc.encode("/meters", "/meters/0")
     private val metersSubX32b = Osc.encode("/meters", "/meters/2")
     private val rtaSubXair = Osc.encode("/meters", "/meters/4")
+    private val grSubXair = Osc.encode("/meters", "/meters/6")
     private val rtaSubX32 = Osc.encode("/meters", "/meters/15")
     private val xinfo = Osc.encode("/xinfo")
     private val meterPrefix = "/meters/".toByteArray(Charsets.ISO_8859_1)
@@ -120,6 +130,13 @@ class MixerClient(private val ctx: Context) {
         rtaWanted = on
         java.util.Arrays.fill(rta, -100f)
         if (on) enqueue("sub:rta", if (x32) rtaSubX32 else rtaSubXair)
+    }
+
+    /** Medidor de reducción del gate y del compresor (solo X Air). */
+    fun setGr(on: Boolean) {
+        grWanted = on && !x32
+        java.util.Arrays.fill(gr, 0f)
+        if (grWanted) enqueue("sub:gr", grSubXair)
     }
 
     fun query(address: String) = enqueue("$address?", Osc.encode(address))
@@ -263,6 +280,16 @@ class MixerClient(private val ctx: Context) {
             }
             return true
         }
+        if (!x32 && which == 6) {
+            var i = 0
+            while (p + 1 < end && i < GR_COUNT) {
+                val v = ((b[p + 1].toInt() shl 8) or (b[p].toInt() and 0xff)).toShort().toInt()
+                gr[i] = Math.abs(v / 256f)
+                i++
+                p += 2
+            }
+            return true
+        }
         if (!x32) {
             if (which != 1) return true
             var i = 0
@@ -357,6 +384,7 @@ class MixerClient(private val ctx: Context) {
                         sendToMixer(metersSubXair, h)
                     }
                     if (rtaWanted) sendToMixer(if (x32) rtaSubX32 else rtaSubXair, h)
+                    if (grWanted && !x32) sendToMixer(grSubXair, h)
                     if (!alive) sendToMixer(xinfo, h)
                 }
             }

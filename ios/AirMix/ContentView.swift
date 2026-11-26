@@ -32,7 +32,17 @@ struct ContentView: View {
     private var compact: Bool { hsc == .compact }
     private var small: Bool { compact || vsc == .compact }
 
+    /// MÚSICO: el monitor elegido (0 = CONTROL TOTAL).
+    private var mus: Bool { core.musicianBus > 0 }
+    /// En MÚSICO los faders son siempre el envío a su monitor.
+    private var eff: SendTarget { mus ? SendTarget(bus: core.musicianBus, fx: 0) : sends }
+
     private func allLayers() -> [Layer] {
+        if mus {
+            // MÚSICO: solo canales, AUX y FX RTN (su monitor va fijo a la derecha).
+            return buildLayers().filter { $0.kind == .ch || $0.kind == .aux || $0.kind == .rtn }
+                .enumerated().map { Layer(id: $0.offset, label: $0.element.label, strips: $0.element.strips) }
+        }
         var l = buildLayers()
         l.append(Layer(id: l.count, label: "FAVS ⭐️", strips: favStrips(favs), fav: true))
         return l
@@ -94,6 +104,10 @@ struct ContentView: View {
                     .padding(.top, small ? 50 : 70)
                     .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if lockHint == h { lockHint = nil } } }
             }
+            // Pantalla de inicio: conexión y elegir modo (CONTROL TOTAL / MÚSICO). Siempre al abrir.
+            if core.startPage > 0 {
+                StartView(small: small).transition(.opacity)
+            }
         }
         .background(C.bg.ignoresSafeArea())
         .preferredColorScheme(.dark)
@@ -121,7 +135,6 @@ struct ContentView: View {
         }
         .alert(wifiHintText, isPresented: $wifiHint) { Button("OK", role: .cancel) {} }
         .onAppear {
-            if UserDefaults.standard.string(forKey: "ip") == nil { showConnect = true }
             debugSetup()
         }
         .onChange(of: core.layoutVersion) { _ in
@@ -132,6 +145,13 @@ struct ContentView: View {
         }
         .onChange(of: core.demo) { on in
             if on { tab = .mix }
+        }
+        .onChange(of: core.musicianBus) { _ in
+            tab = .mix
+            detail = nil
+            layerIdx = 0
+            sends = .main
+            stripSends.strip = nil
         }
     }
 
@@ -156,12 +176,15 @@ struct ContentView: View {
             Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
                 .font(bf(small ? 9 : 11)).foregroundColor(C.dim).padding(.top, small ? 6 : 8)
             Spacer().frame(width: small ? 2 : 18)
-            ForEach(Tab.allCases, id: \.self) { t in
+            ForEach(Tab.allCases.filter { !mus || $0 == .mix }, id: \.self) { t in
                 Pill(text: t.rawValue, active: tab == t, style: .tab, size: small ? 11 : 15) { tab = t }
                     .frame(width: small ? 68 : 112, height: small ? 32 : 38)
                     .allowsHitTesting(!locked)
             }
             Spacer(minLength: 0)
+            if mus {
+                MusicianChip(bus: core.musicianBus, small: small) { core.startPage = 2 }.allowsHitTesting(!locked)
+            }
             SoloChip(small: small).allowsHitTesting(!locked)
             ClipChip(small: small).allowsHitTesting(!locked)
             lockButton
@@ -169,7 +192,7 @@ struct ContentView: View {
             WifiQualityView(small: small)
                 .onTapGesture { wifiHint = true }
                 .allowsHitTesting(!locked)
-            Button { if core.demo { confirmDemoExit = true } else { showConnect = true } } label: {
+            Button { if core.demo { confirmDemoExit = true } else { core.startPage = core.connected ? 2 : 1 } } label: {
                 Text(core.demo ? "▶ MODO DEMO  ✕" : core.connected ? "●  \(core.console.model)  \(core.client.host ?? "")" : "●  SIN CONEXIÓN")
                     .font(bf(small ? 11 : 14))
                     .lineLimit(1)
@@ -232,17 +255,31 @@ struct ContentView: View {
                             tab = .mix
                             detail = nil
                         }
-                        .frame(height: small ? 34 : 48)
+                        .frame(height: small ? 30 : 48)
                     }
                 }
             }
 
-            Pill(text: "✎ NOTAS", active: showNotes, style: .outline, size: small ? 12 : 14) {
-                withAnimation(.easeOut(duration: 0.2)) { showNotes.toggle() }
+            if small && !mus {
+                // Celular: 2 × 2 chiquito (NOTAS · MUTE FX / TAP · SENDS): la fila de arriba de MEZCLA no hace falta.
+                HStack(spacing: 3) {
+                    Pill(text: "✎", active: showNotes, style: .outline, size: 14) {
+                        withAnimation(.easeOut(duration: 0.2)) { showNotes.toggle() }
+                    }
+                    .frame(height: 32)
+                    FxMuteButton(small: true).id(core.layoutVersion).frame(height: 32).layoutPriority(1)
+                }
+                HStack(spacing: 3) {
+                    TapButton(small: true).frame(maxWidth: .infinity)
+                    sendsMenu(label: "SENDS ▾", dark: false, small: true)
+                }
+            } else {
+                Pill(text: small ? "✎" : "✎ NOTAS", active: showNotes, style: .outline, size: small ? 14 : 14) {
+                    withAnimation(.easeOut(duration: 0.2)) { showNotes.toggle() }
+                }
+                .frame(height: small ? 32 : 42)
+                if !mus { FxMuteButton().id(core.layoutVersion).frame(height: 74) }
             }
-            .frame(height: small ? 34 : 42)
-
-            FxMuteButton().id(core.layoutVersion).frame(height: small ? 50 : 74)
         }
         .padding(small ? 6 : 10)
         .frame(width: small ? 90 : 120)
@@ -282,14 +319,28 @@ struct ContentView: View {
     private func mixView(_ layers: [Layer]) -> some View {
         let layer = layerIdx < layers.count ? layers[layerIdx] : layers.first
         let strips = layer?.strips ?? []
-        let master: Strip = sends.bus > 0 ? Strip(kind: .bus, idx: sends.bus) : sends.fx > 0 ? Strip(kind: .fxsend, idx: sends.fx) : Strip(kind: .lr)
+        let sends = eff
+        let master: Strip = mus ? Strip(kind: .bus, idx: core.musicianBus) : sends.bus > 0 ? Strip(kind: .bus, idx: sends.bus) : sends.fx > 0 ? Strip(kind: .fxsend, idx: sends.fx) : Strip(kind: .lr)
+        // Celular: la fila de arriba solo aparece si dice algo que no está en otro lado
+        // (SENDS ON FADER, MÚSICO o elegir FAVS). La capa ya está marcada en el riel; TAP y SENDS están abajo del riel.
+        let showHeader = !small || sends != .main || mus || layer?.fav == true
         return VStack(spacing: 0) {
+            if showHeader {
             HStack(spacing: 10) {
-                if sends != .main {
+                if mus {
+                    // MÚSICO: el encabezado es su monitor, con el color del bus. Los faders son lo que le llega.
+                    SendTargetName(target: sends, prefix: "MONITOR \(core.musicianBus)  ·  ", inkOnColor: true).font(bf(small ? 13 : 20)).lineLimit(1).minimumScaleFactor(0.7)
+                    Text("lo que te llega").font(bf(small ? 11 : 15)).foregroundColor(C.ink.opacity(0.7)).lineLimit(1)
+                    Spacer()
+                    Button { core.startPage = 2 } label: {
+                        Text("CAMBIAR MONITOR").font(bf(small ? 11 : 14)).foregroundColor(C.text).padding(.horizontal, 14).frame(height: small ? 30 : 38)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(C.surface2))
+                    }.buttonStyle(.plain)
+                } else if sends != .main {
                     SendTargetName(target: sends, prefix: "SENDS ON FADER  →  ", inkOnColor: true).font(bf(small ? 13 : 20)).lineLimit(1).minimumScaleFactor(0.7)
                     Spacer()
                     sendsMenu(label: "CAMBIAR ▾", dark: true)
-                    Button { sends = .main } label: {
+                    Button { self.sends = .main } label: {
                         Text("SALIR ✕").font(bf(14)).foregroundColor(C.text).padding(.horizontal, 14).frame(height: 38)
                             .background(RoundedRectangle(cornerRadius: 10).fill(C.surface2))
                     }.buttonStyle(.plain)
@@ -302,13 +353,16 @@ struct ContentView: View {
                         Pill(text: "ELEGIR TIRAS", style: .outline, size: small ? 11 : 14) { editFavs = true }
                             .frame(width: small ? 112 : 150, height: small ? 30 : 38)
                     }
-                    TapButton(small: small)
-                    sendsMenu(label: "SENDS ON FADER ▾", dark: false)
+                    if !small {
+                        TapButton(small: small)
+                        sendsMenu(label: "SENDS ON FADER ▾", dark: false)
+                    }
                 }
             }
             .padding(.horizontal, small ? 10 : 16)
-            .frame(height: small ? 36 : 54)
+            .frame(height: small ? 34 : 54)
             .background(SendTargetBackground(target: sends))
+            }
 
             HStack(spacing: 4) {
                 if compact {
@@ -339,7 +393,8 @@ struct ContentView: View {
                         }
                     }
                 }
-                StripView(strip: master, target: .main, compact: small) { openDetail($0) }
+                // MÚSICO: su monitor (volumen y mute) a la derecha; sin EQ del monitor.
+                StripView(strip: master, target: .main, compact: small) { if !mus { openDetail($0) } }
                     .frame(width: compact ? 104 : nil)
                     .frame(maxWidth: compact ? 104 : .infinity)
                     .padding(.leading, 8)
@@ -348,7 +403,7 @@ struct ContentView: View {
         }
     }
 
-    private func sendsMenu(label: String, dark: Bool) -> some View {
+    private func sendsMenu(label: String, dark: Bool, small sm: Bool = false) -> some View {
         Menu {
             Button("MAIN (normal)") { sends = .main }
             ForEach(1...max(core.console.buses, 1), id: \.self) { b in
@@ -360,8 +415,8 @@ struct ContentView: View {
                 }
             }
         } label: {
-            Text(label).font(bf(14)).foregroundColor(dark ? C.ink : C.text)
-                .padding(.horizontal, 14).frame(height: 38)
+            Text(label).font(bf(sm ? 11 : 14)).foregroundColor(dark ? C.ink : C.text).lineLimit(1).minimumScaleFactor(0.6)
+                .padding(.horizontal, sm ? 4 : 14).frame(maxWidth: sm ? .infinity : nil).frame(height: sm ? 30 : 38)
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(dark ? C.ink.opacity(0.4) : C.line))
         }
     }
@@ -389,7 +444,20 @@ struct ContentView: View {
         }
         Store.shared.incoming("/lr/mix/fader", .f(0.75))
         Store.shared.incoming("/lr/mix/on", .i(1))
+        // Las capturas de siempre van sin la pantalla de inicio.
+        core.startPage = 0
         switch screen {
+        case "inicio":
+            UserDefaults.standard.set("192.168.1.1", forKey: "ip")
+            core.discovered = [MixerInfo(ip: "192.168.1.20", port: 10024, name: "XR18-7A-03-D1", model: "XR18", firmware: "1.17")]
+            core.startPage = 1
+        case "modo", "musico":
+            Store.shared.incoming("/bus/1/config/name", .s("GARKO"))
+            Store.shared.incoming("/bus/2/config/name", .s("PALMITO"))
+            Store.shared.incoming("/bus/1/config/color", .i(4))
+            Store.shared.incoming("/bus/2/config/color", .i(3))
+            UserDefaults.standard.set(1, forKey: "musicianBus")
+            if screen == "modo" { core.startPage = 2 } else { core.musicianBus = 1 }
         case "notas": showNotes = true
         case "link": Store.shared.incoming(chLinkAddr(7), .i(1))
         case "config": detail = Strip(kind: .ch, idx: 1)
@@ -423,7 +491,10 @@ struct ContentView: View {
     }
 
     private func detailView(_ s: Strip) -> some View {
-        let secs = sectionsFor(s)
+        // MÚSICO: del canal, solo GATE, COMPRESOR y EQ (sin CONFIG ni envíos a otros monitores).
+        let all = sectionsFor(s)
+        let filtered = all.filter { $0 == .gate || $0 == .dyn || $0 == .eq }
+        let secs = mus ? (filtered.isEmpty ? [Section.eq] : filtered) : all
         let sec = secs.contains(section) ? section : secs[0]
         return VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -433,7 +504,11 @@ struct ContentView: View {
                     ForEach(secs, id: \.self) { x in
                         SectionTab(strip: s, section: x, active: x == sec) { section = x }.frame(width: compact ? 84 : 96, height: 40)
                     }
-                    ClipMenu(strip: s, section: sec, small: small).padding(.leading, 12)
+                    if mus {
+                        Text("⚠ cambia también lo que suena en la sala").font(bf(small ? 11 : 13)).foregroundColor(C.yellow).lineLimit(1).padding(.leading, 12)
+                    } else {
+                        ClipMenu(strip: s, section: sec, small: small).padding(.leading, 12)
+                    }
                     Pill(text: "‹", style: .outline, size: 22) { step(s, -1) }.frame(width: 50, height: 40).padding(.leading, 6)
                     Pill(text: "›", style: .outline, size: 22) { step(s, 1) }.frame(width: 50, height: 40)
                 }
@@ -443,7 +518,7 @@ struct ContentView: View {
             .background(C.panel)
 
             HStack(spacing: 4) {
-                StripView(strip: s, target: .main, compact: small) { _ in }.frame(width: small ? 96 : 130)
+                StripView(strip: s, target: eff, compact: small) { _ in }.frame(width: small ? 96 : 130)
                 DetailPanel(strip: s, section: sec)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(RoundedRectangle(cornerRadius: 14).fill(C.panel))
@@ -579,10 +654,11 @@ struct SectionTab: View {
 
 /// MUTE FX: mutea todos los efectos y restaura los que estaban abiertos.
 struct FxMuteButton: View {
+    var small = false
     @StateObject private var group = ParamGroup(FxMute.targets())
     var body: some View {
         let all = group.params.allSatisfy { ($0.int ?? 1) == 0 }
-        Pill(text: all ? "FX\nMUTEADOS" : "MUTE\nFX", active: all, activeColor: C.mute, style: .mute, size: 16) {
+        Pill(text: all ? (small ? "FX OFF" : "FX\nMUTEADOS") : (small ? "MUTE FX" : "MUTE\nFX"), active: all, activeColor: C.mute, style: .mute, size: small ? 11 : 16) {
             FxMute.toggle()
         }
     }
@@ -902,10 +978,6 @@ struct ScenesView: View {
                 Spacer(minLength: 0)
                 HStack {
                     Pill(text: "ACERCA DE", style: .outline, size: 12) { showAbout = true }.frame(width: 130, height: 36)
-                    // MODO DEMO: acá atrás a propósito (no en la pantalla de conexión).
-                    Pill(text: core.demo ? "SALIR DEL DEMO" : "▶ MODO DEMO", style: .outline, size: 12, idleColor: core.demo ? C.yellow : C.dim) {
-                        if core.demo { core.stopDemo() } else { confirmDemo = true }
-                    }.frame(width: 150, height: 36)
                     Spacer()
                 }
             }
@@ -963,11 +1035,6 @@ struct ScenesView: View {
             confirmLoad = true
         }
         .sheet(isPresented: $showAbout) { AboutView() }
-        .confirmationDialog("Modo demo", isPresented: $confirmDemo, titleVisibility: .visible) {
-            Button("Entrar") { core.startDemo() }
-        } message: {
-            Text("Simula una XR12 para probar la app sin consola: nombres, faders, mutes, envíos, EQ, efectos y medidores que se mueven.\n\nMientras está prendido no sale nada por la red. Para salir, tocá \"MODO DEMO ✕\" arriba a la derecha.")
-        }
         .fileExporter(isPresented: $exporting, document: exportDoc, contentType: .data, defaultFilename: exportName + ".scn") { _ in }
         .onChange(of: scenes.exportText) { t in
             if let t = t {
@@ -1072,8 +1139,8 @@ struct TapButton: View {
     @State private var down = false
     @State private var text = TapTempo.bpm > 0 ? "TAP \(TapTempo.bpm)" : "TAP"
     var body: some View {
-        Text(text).font(bf(small ? 11 : 14)).foregroundColor(flash ? C.ink : C.text)
-            .frame(width: small ? 84 : 110, height: small ? 30 : 38)
+        Text(text).font(bf(small ? 11 : 14)).foregroundColor(flash ? C.ink : C.text).lineLimit(1).minimumScaleFactor(0.6)
+            .frame(maxWidth: small ? .infinity : 110).frame(height: small ? 30 : 38)
             .background(RoundedRectangle(cornerRadius: 10).fill(flash ? C.accent : Color.clear))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(C.line))
             .contentShape(Rectangle())
@@ -1169,6 +1236,9 @@ struct ClipMenu: View {
     @State private var confirmHere = false
     @State private var many = false
     @State private var msg: String?
+    @State private var naming = false
+    @State private var presetName = ""
+    @State private var toLoad: Presets.Preset?
     var body: some View {
         Menu {
             ForEach(cb.options(strip, section), id: \.self) { w in
@@ -1183,6 +1253,17 @@ struct ClipMenu: View {
                 Button("Pegar \(c.label) en varios…") { many = true }
                 Button("Borrar lo copiado", role: .destructive) { cb.clear() }
             }
+            // PRESETS de canal: guardados en el dispositivo, se cargan en cualquier tira del mismo tipo.
+            Button("★ Guardar como preset…") { naming = true }
+            let list = Presets.stripPresets(strip)
+            if !list.isEmpty {
+                Menu("★ Cargar preset…") {
+                    ForEach(list) { p in Button(p.name) { toLoad = p } }
+                }
+                Menu("Borrar un preset…") {
+                    ForEach(list) { p in Button(p.name, role: .destructive) { Presets.deleteStrip(p) } }
+                }
+            }
         } label: {
             Text(small ? "📋" : "📋 COPIAR").font(bf(14)).foregroundColor(C.text).lineLimit(1)
                 .frame(width: small ? 54 : 120, height: 40)
@@ -1192,6 +1273,24 @@ struct ClipMenu: View {
             Button("Pegar") { cb.paste(strip); msg = "✓ Pegado en \(strip.title)" }
         } message: { Text("Reemplaza lo que tiene ahora (no se tocan nombre, entrada, GAIN ni 48V).") }
         .sheet(isPresented: $many) { PasteManyView() }
+        .alert("Guardar \(strip.title) como preset", isPresented: $naming) {
+            TextField("Ej.: VOZ GARKO EN BAR", text: $presetName)
+            Button("Guardar") {
+                let t = presetName.trimmingCharacters(in: .whitespaces)
+                let name = String((t.isEmpty ? strip.title : t).prefix(32))
+                Presets.saveStrip(strip, name: name) { n in
+                    msg = n > 0 ? "★ Preset \"\(name)\" guardado" : "No se pudo leer de la consola: ¿está conectada?"
+                }
+                presetName = ""
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: { Text("Guarda EQ, compresor, gate y filtro (no nombre, entrada, GAIN, 48V ni envíos).") }
+        .confirmationDialog("★ \(toLoad?.name ?? "")", isPresented: Binding(get: { toLoad != nil }, set: { if !$0 { toLoad = nil } }), titleVisibility: .visible) {
+            Button("Cargar en \(strip.title)") {
+                if let p = toLoad { Presets.applyStrip(p, strip); msg = "✓ Cargado en \(strip.title)" }
+                toLoad = nil
+            }
+        } message: { Text("Reemplaza la configuración de \(strip.title) (no toca nombre, entrada, GAIN, 48V ni envíos).") }
         .overlay(alignment: .bottom) {
             if let m = msg {
                 Text(m).font(bf(12)).foregroundColor(C.text).padding(8).fixedSize()
@@ -1243,5 +1342,32 @@ struct PasteManyView: View {
                 dismiss()
             }
         } message: { Text("Reemplaza lo que tienen ahora (no se tocan nombre, entrada, GAIN ni 48V).") }
+    }
+}
+
+
+/// MÚSICO: en qué monitor estás (tocar = volver a elegir).
+struct MusicianChip: View {
+    let bus: Int
+    let small: Bool
+    let onTap: () -> Void
+    @ObservedObject private var name: Param
+
+    init(bus: Int, small: Bool, onTap: @escaping () -> Void) {
+        self.bus = bus
+        self.small = small
+        self.onTap = onTap
+        _name = ObservedObject(wrappedValue: Store.shared.param(Strip(kind: .bus, idx: bus).nameAddr))
+    }
+
+    var body: some View {
+        let n = (name.value?.stringValue ?? "").trimmingCharacters(in: .whitespaces)
+        Button(action: onTap) {
+            Text(n.isEmpty ? "🎧 MONITOR \(bus)" : "🎧 MONITOR \(bus) · \(n.uppercased())")
+                .font(bf(small ? 11 : 14)).foregroundColor(C.ink).lineLimit(1).minimumScaleFactor(0.7)
+                .padding(.horizontal, 10).frame(height: small ? 32 : 38)
+                .background(RoundedRectangle(cornerRadius: 10).fill(C.sends))
+        }
+        .buttonStyle(.plain)
     }
 }

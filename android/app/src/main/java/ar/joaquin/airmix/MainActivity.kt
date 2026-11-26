@@ -74,6 +74,9 @@ class MainActivity : Activity() {
     private var everConnected = false
     private lateinit var lostBanner: TextView
     private lateinit var lockBtn: Btn
+    private lateinit var start: StartScreen
+    private lateinit var musChip: Btn
+    private var discoverTick = 0
     private lateinit var bigTimer: FrameLayout
     private lateinit var bigTimerText: TextView
     private var locked = false
@@ -81,6 +84,16 @@ class MainActivity : Activity() {
     private var dialog: AlertDialog? = null
     private var dialogList: LinearLayout? = null
     private val seen = HashSet<String>()
+
+    /** Celular: la letra del sistema agrandada no puede romper la interfaz compacta (en tablet no se toca). */
+    override fun attachBaseContext(base: Context) {
+        val cfg = base.resources.configuration
+        if (cfg.screenHeightDp in 1..519 && cfg.fontScale > 1f) {
+            val c = android.content.res.Configuration(cfg)
+            c.fontScale = 1f
+            super.attachBaseContext(base.createConfigurationContext(c))
+        } else super.attachBaseContext(base)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,9 +109,11 @@ class MainActivity : Activity() {
         watchLinks()
         rebuildRail()
         render()
+        // Siempre arranca en la pantalla de conexión (y después, la de elegir modo).
+        // Si hay una consola usada antes, se le habla en silencio para que aparezca enseguida.
         val ip = prefs().getString("ip", null)
         if (ip != null) App.client?.connect(ip, prefs().getInt("port", 0))
-        else handler.postDelayed({ showConnect() }, 400)
+        openStart(connection = true)
     }
 
     override fun onResume() {
@@ -137,6 +152,10 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         if (locked) return
+        if (::start.isInitialized && start.shown) {
+            if (start.page == 2 && !Demo.on) start.showConnection() else super.onBackPressed()
+            return
+        }
         if (::overlay.isInitialized && overlay.visibility == View.VISIBLE) {
             hideSends()
             return
@@ -185,7 +204,15 @@ class MainActivity : Activity() {
         }
         while (true) {
             val d = c.discovered.poll() ?: break
-            onDiscovered(d)
+            if (start.shown) start.onDiscovered(d) else onDiscovered(d)
+        }
+        if (start.shown) {
+            if (start.page == 1 && ++discoverTick >= 90) {
+                discoverTick = 0
+                c.discover()
+            }
+            if (c.isConnected()) start.onConnected()
+            else if (start.waitTimedOut(android.os.SystemClock.uptimeMillis())) vibrate(longArrayOf(0, 80))
         }
         val isConn = c.isConnected()
         if (isConn != connected) {
@@ -276,7 +303,7 @@ class MainActivity : Activity() {
     private fun tapButton(): Btn {
         val b = Btn(this, if (TapTempo.bpm > 0) "TAP ${TapTempo.bpm}" else "TAP", BtnStyle.OUTLINE, sz(15f, 12f))
         b.activeColor = C.ACCENT
-        b.maxLines = 1
+        b.fitOneLine(8)
         b.setOnTouchListener { v, e ->
             if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
                 val n = TapTempo.tap(android.os.SystemClock.uptimeMillis())
@@ -372,6 +399,15 @@ class MainActivity : Activity() {
         top.addView(clipChip, lp(dp(sz(190, 52)), dp(sz(40, 32))).m(r = dp(sz(8, 4))))
         Clipboard.onChange = { updateClipChip() }
         updateClipChip()
+        // MÚSICO: en qué monitor estás (tocar = volver a elegir).
+        musChip = Btn(this, "", BtnStyle.LIGHT, sz(14f, 12f))
+        musChip.activeColor = C.SENDS
+        musChip.active = true
+        musChip.maxLines = 1
+        musChip.ellipsize = android.text.TextUtils.TruncateAt.END
+        musChip.visibility = View.GONE
+        musChip.setOnClickListener { openStart(connection = false) }
+        top.addView(musChip, lp(dp(sz(230, 150)), dp(sz(40, 32))).m(r = dp(sz(8, 4))))
         lockBtn = Btn(this, "🔓", BtnStyle.OUTLINE, sz(18f, 15f))
         lockBtn.activeColor = C.ACCENT
         lockBtn.setOnClickListener {
@@ -386,7 +422,7 @@ class MainActivity : Activity() {
         conn.maxLines = 1
         conn.ellipsize = android.text.TextUtils.TruncateAt.END
         conn.setPadding(dp(8), 0, dp(8), 0)
-        conn.setOnClickListener { if (Demo.on) confirmStopDemo() else showConnect() }
+        conn.setOnClickListener { if (Demo.on) confirmStopDemo() else openStart(connection = !connected) }
         // Calidad del wifi: loguito + luz de rojo a verde según el tiempo de respuesta de la consola.
         wifi = WifiView(this)
         wifi.setOnClickListener {
@@ -443,7 +479,88 @@ class MainActivity : Activity() {
         overlay.setOnClickListener { hideSends() }
         frame.addView(overlay, FrameLayout.LayoutParams(MATCH, MATCH))
         StripSends.onShow = { s -> showSends(s) }
+        start = StartScreen(this)
+        start.visibility = View.GONE
+        start.onRescan = {
+            App.client?.discover()
+            handler.postDelayed({ App.client?.discover() }, 1500)
+        }
+        start.onConnect = { ip, port, model ->
+            if (Demo.on) leaveDemo()
+            if (model != null) {
+                App.applyModel(model)
+                prefs().edit().putString("model", model).apply()
+            }
+            connectTo(ip, port)
+            watchLinks()
+            rebuildRail()
+            render()
+        }
+        start.onDemo = {
+            if (Demo.on) {
+                stopDemo()
+            } else {
+                startDemo()
+                start.showModes()
+            }
+        }
+        start.onFull = {
+            Mode.musicianBus = 0
+            start.hide()
+            applyMode()
+        }
+        start.onMusician = { b ->
+            Mode.musicianBus = b
+            prefs().edit().putInt("musicianBus", b).apply()
+            start.hide()
+            applyMode()
+        }
+        frame.addView(start, FrameLayout.LayoutParams(MATCH, MATCH))
         return frame
+    }
+
+    /** Pantalla de inicio: conexión (1) o elegir modo (2). */
+    private fun openStart(connection: Boolean) {
+        if (locked) return
+        hideSends()
+        start.lastIp = prefs().getString("ip", null)
+        start.lastBus = prefs().getInt("musicianBus", 0)
+        if (connection) start.showConnection() else start.showModes()
+    }
+
+    /** Aplica CONTROL TOTAL o MÚSICO a toda la interfaz. */
+    private fun applyMode() {
+        val m = Mode.musician
+        if (m && Mode.musicianBus > App.console.buses) Mode.musicianBus = 1
+        for ((t, b) in tabBtns) b.visibility = if (!m || t == Tab.MIX) View.VISIBLE else View.GONE
+        if (m) tab = Tab.MIX
+        musChip.visibility = if (m) View.VISIBLE else View.GONE
+        if (m) {
+            val bus = Mode.musicianBus
+            musChip.text = "🎧 MONITOR $bus"
+            musChip.bind(Strip(Kind.BUS, bus).nameAddr) { v ->
+                if (Mode.musicianBus == bus) {
+                    val n = v.toString().trim()
+                    musChip.text = if (n.isEmpty()) "🎧 MONITOR $bus" else "🎧 MONITOR $bus · ${n.uppercase()}"
+                }
+            }
+        }
+        sends = if (m) SendTarget(bus = Mode.musicianBus) else SendTarget.MAIN
+        detail = null
+        layerIdx = 0
+        rebuildRail()
+        render()
+    }
+
+    /** Sale del demo sin pasar por la pantalla de inicio (porque ya se está conectando a una consola real). */
+    private fun leaveDemo() {
+        Demo.stop()
+        Clip.reset()
+        sends = SendTarget.MAIN
+        detail = null
+        layerIdx = 0
+        connected = false
+        updateConn()
     }
 
     /** Raíz que, con el candado puesto, se come todos los toques salvo los del candado. */
@@ -503,6 +620,24 @@ class MainActivity : Activity() {
     /** Solo para las capturas automáticas de CI (ScreensTest). */
     internal fun debugScreen(name: String) {
         when (name) {
+            "app" -> start.hide()
+            "inicio" -> {
+                bigTimer.visibility = View.GONE
+                hideSends()
+                if (Demo.on) leaveDemo()
+                start.lastIp = "192.168.1.1"
+                start.showConnection()
+                start.onDiscovered(MixerInfo("192.168.1.20", 10024, "XR18-7A-03-D1", "XR18", "1.17"))
+            }
+            "modo" -> {
+                App.store.incoming("/bus/1/config/name", "GARKO")
+                App.store.incoming("/bus/2/config/name", "PALMITO")
+                App.store.incoming("/bus/1/config/color", 4)
+                App.store.incoming("/bus/2/config/color", 3)
+                start.lastBus = 1
+                start.showModes()
+            }
+            "musico" -> start.onMusician?.invoke(1)
             "favoritos" -> {
                 prefs().edit().putString("favs", "CH:1;CH:2;CH:7;CH:8;BUS:1").apply()
                 rebuildRail()
@@ -607,21 +742,28 @@ class MainActivity : Activity() {
             .show()
     }
 
-    /** Riel izquierdo: capas (con scroll si son muchas, ej. X32) + MUTE FX + CLR SOLO siempre a mano. */
+    /**
+     * Riel izquierdo: reloj + capas (con scroll si son muchas, ej. X32) + NOTAS + MUTE FX.
+     * Celular: todo más chico, y TAP / SENDS ON FADER vienen acá abajo (así la fila de arriba de MEZCLA no existe).
+     * MÚSICO: solo canales, AUX y FX RTN (su monitor va fijo a la derecha); sin MUTE FX, TAP ni SENDS.
+     */
     private fun rebuildRail() {
-        layers = buildLayers() + Layer("FAVS ⭐️", favStrips(prefs().getString("favs", "") ?: ""), fav = true)
+        val mus = Mode.musician
+        layers = if (mus) buildLayers().filter { it.kind == Kind.CH || it.kind == Kind.AUX || it.kind == Kind.RTN }
+        else buildLayers() + Layer("FAVS ⭐️", favStrips(prefs().getString("favs", "") ?: ""), fav = true)
         if (layerIdx >= layers.size) layerIdx = 0
         rail.removeAllViews()
         layerBtns.clear()
+        val k = Layout.compact
 
         val timerBox = col()
         timerBox.gravity = Gravity.CENTER
         timerBox.background = rounded(C.SURFACE, 12)
-        timerBox.addView(label("SHOW", 11f, C.TEXT_DIM), lp(MATCH, dp(16)))
-        timerLabel = label("00:00", sz(24f, 18f), C.TEXT_DIM)
+        timerBox.addView(label("SHOW", sz(11f, 9f), C.TEXT_DIM), lp(MATCH, dp(sz(16, 12))))
+        timerLabel = label("00:00", sz(24f, 17f), C.TEXT_DIM)
         lastTimerText = ""
-        timerBox.addView(timerLabel, lp(MATCH, dp(sz(30, 24))))
-        if (!Layout.compact) timerBox.addView(label("tocá: ▶ / ❚❚", 10f, C.TICK), lp(MATCH, dp(14)))
+        timerBox.addView(timerLabel, lp(MATCH, dp(sz(30, 22))))
+        if (!k) timerBox.addView(label("tocá: ▶ / ❚❚", 10f, C.TICK), lp(MATCH, dp(14)))
         timerBox.isClickable = true
         timerBox.setOnClickListener {
             ShowTimer.toggle(prefs())
@@ -635,12 +777,13 @@ class MainActivity : Activity() {
             updateTimer()
             true
         }
-        rail.addView(timerBox, lp(MATCH, dp(sz(76, 58))).m(dp(sz(10, 6)), dp(sz(10, 6)), dp(sz(10, 6)), dp(2)))
+        rail.addView(timerBox, lp(MATCH, dp(sz(76, 44))).m(dp(sz(10, 5)), dp(sz(10, 5)), dp(sz(10, 5)), dp(2)))
 
         val list = col()
-        list.setPadding(dp(sz(10, 6)), dp(sz(8, 4)), dp(sz(10, 6)), dp(sz(8, 4)))
+        list.setPadding(dp(sz(10, 5)), dp(sz(8, 3)), dp(sz(10, 5)), dp(sz(8, 3)))
         layers.forEachIndexed { i, l ->
-            val b = Btn(this, l.label, BtnStyle.NAV, sz(15f, 12f))
+            val b = Btn(this, l.label, BtnStyle.NAV, sz(15f, 11f))
+            b.maxLines = 1
             b.activeColor = if (l.fav) C.YELLOW else Sector.of(l.kind)
             b.idleText = if (l.fav) C.YELLOW else Sector.of(l.kind)
             b.refresh()
@@ -651,31 +794,49 @@ class MainActivity : Activity() {
                 render()
             }
             layerBtns.add(b)
-            list.addView(b, lp(MATCH, dp(sz(50, 38))).m(b = dp(sz(6, 4))))
+            list.addView(b, lp(MATCH, dp(sz(50, 32))).m(b = dp(sz(6, 3))))
         }
         val sv = ScrollView(this)
         sv.isVerticalScrollBarEnabled = false
         sv.addView(list, FrameLayout.LayoutParams(MATCH, WRAP))
         rail.addView(sv, lp(MATCH, 0, 1f))
 
-        val notesBtn = Btn(this, "✎ NOTAS", BtnStyle.OUTLINE, sz(15f, 12f))
+        val notesBtn = Btn(this, if (k) "✎" else "✎ NOTAS", BtnStyle.OUTLINE, sz(15f, 14f))
         notesBtn.setOnClickListener { toggleNotes() }
-        rail.addView(notesBtn, lp(MATCH, dp(sz(44, 36))).m(dp(sz(10, 6)), dp(sz(8, 4)), dp(sz(10, 6)), 0))
-
-        val fx = Btn(this, "MUTE\nFX", BtnStyle.MUTE, sz(17f, 13f))
+        if (mus) {
+            rail.addView(notesBtn, lp(MATCH, dp(sz(44, 32))).m(dp(sz(10, 5)), dp(sz(8, 4)), dp(sz(10, 5)), dp(sz(14, 6))))
+            return
+        }
+        val fx = Btn(this, if (k) "MUTE FX" else "MUTE\nFX", BtnStyle.MUTE, sz(17f, 11f))
         fx.maxLines = 2
         fx.activeColor = C.MUTE
         val refresh: (Any) -> Unit = {
             val all = FxMute.allMuted()
             fx.active = all
-            fx.text = if (all) "FX\nMUTEADOS" else "MUTE\nFX"
+            fx.text = if (all) (if (k) "FX OFF" else "FX\nMUTEADOS") else (if (k) "MUTE FX" else "MUTE\nFX")
         }
         for (a in FxMute.targets()) fx.bind(a, refresh)
         fx.setOnClickListener {
             FxMute.toggle()
             refresh(0)
         }
-        rail.addView(fx, lp(MATCH, dp(sz(78, 56))).m(dp(sz(10, 6)), dp(sz(8, 4)), dp(sz(10, 6)), dp(sz(14, 6))))
+        if (!k) {
+            rail.addView(notesBtn, lp(MATCH, dp(44)).m(dp(10), dp(8), dp(10), 0))
+            rail.addView(fx, lp(MATCH, dp(78)).m(dp(10), dp(8), dp(10), dp(14)))
+            return
+        }
+        // Celular: 2 × 2 chiquito (NOTAS · MUTE FX / TAP · SENDS).
+        val g1 = row()
+        g1.addView(notesBtn, lp(0, dp(32), 1f).m(r = dp(3)))
+        g1.addView(fx, lp(0, dp(32), 1.6f))
+        rail.addView(g1, lp(MATCH, WRAP).m(dp(5), dp(4), dp(5), 0))
+        val g2 = row()
+        g2.addView(tapButton(), lp(0, dp(32), 1f).m(r = dp(3)))
+        val sel = Btn(this, "SENDS ▾", BtnStyle.OUTLINE, 11f)
+        sel.maxLines = 1
+        sel.setOnClickListener { showSendsPopup(sel) }
+        g2.addView(sel, lp(0, dp(32), 1f))
+        rail.addView(g2, lp(MATCH, WRAP).m(dp(5), dp(3), dp(5), dp(6)))
     }
 
     /** CLR SOLO: apaga todos los solos (vive en MEDIDORES y en el aviso "● SOLO" de arriba). */
@@ -749,7 +910,27 @@ class MainActivity : Activity() {
 
         val header = row()
         header.setPadding(dp(16), 0, dp(10), 0)
-        if (sendsMode) {
+        val mus = Mode.musician
+        if (mus) {
+            // MÚSICO: el encabezado es su monitor, con el color del bus. Los faders son lo que le llega.
+            val bus = Mode.musicianBus
+            val bg = rounded(C.SENDS, 0)
+            header.background = bg
+            val title = label("MONITOR $bus", sz(20f, 14f), C.INK, Gravity.START or Gravity.CENTER_VERTICAL)
+            title.maxLines = 1
+            title.bind(Strip(Kind.BUS, bus).nameAddr) { v ->
+                val n = v.toString().trim()
+                title.text = if (n.isEmpty()) "MONITOR $bus  ·  lo que te llega" else "MONITOR $bus  ·  ${n.uppercase()}  ·  lo que te llega"
+            }
+            title.bind(Strip(Kind.BUS, bus).colorAddr) { v ->
+                bg.setColor(BusColor.of(v.asI()))
+                title.setTextColor(BusColor.ink(v.asI()))
+            }
+            header.addView(title, lp(0, MATCH, 1f))
+            val change = Btn(this, "CAMBIAR MONITOR", BtnStyle.LIGHT, sz(15f, 12f))
+            change.setOnClickListener { openStart(connection = false) }
+            header.addView(change, lp(dp(sz(190, 140)), dp(sz(40, 30))))
+        } else if (sendsMode) {
             val bg = rounded(if (sends.fx > 0) C.ACCENT else C.SENDS, 0)
             header.background = bg
             val title = label("SENDS ON FADER  →  ${sends.display("")}", sz(20f, 14f), C.INK, Gravity.START or Gravity.CENTER_VERTICAL)
@@ -792,7 +973,9 @@ class MainActivity : Activity() {
             sel.setOnClickListener { showSendsPopup(sel) }
             header.addView(sel, lp(dp(sz(190, 140)), dp(sz(40, 32))))
         }
-        root.addView(header, lp(MATCH, dp(sz(56, 40))))
+        // Celular: la fila de arriba solo aparece si dice algo que no está en otro lado
+        // (SENDS ON FADER, MÚSICO o elegir FAVS). La capa ya está marcada en el riel; TAP y SENDS están abajo del riel.
+        if (!Layout.compact || sendsMode || mus || layer?.fav == true) root.addView(header, lp(MATCH, dp(sz(56, 32))))
 
         val strips = row()
         strips.gravity = Gravity.TOP
@@ -817,11 +1000,13 @@ class MainActivity : Activity() {
             strips.addView(v, lp(0, MATCH, 1f).m(dp(2), 0, dp(2), 0))
         }
         val master = when {
+            mus -> Strip(Kind.BUS, Mode.musicianBus)
             sends.bus > 0 -> Strip(Kind.BUS, sends.bus)
             sends.fx > 0 -> Strip(Kind.FXSEND, sends.fx)
             else -> Strip(Kind.LR)
         }
-        strips.addView(stripView(master, SendTarget.MAIN) { openDetail(it) }, lp(0, MATCH, 1f).m(dp(10), 0, dp(2), 0))
+        // MÚSICO: su monitor (volumen y mute) a la derecha; sin EQ del monitor.
+        strips.addView(stripView(master, SendTarget.MAIN) { if (!mus) openDetail(it) }, lp(0, MATCH, 1f).m(dp(10), 0, dp(2), 0))
         root.addView(strips, lp(MATCH, 0, 1f))
         return root
     }
@@ -909,7 +1094,10 @@ class MainActivity : Activity() {
     // ------------------------------------------------------------------ DETALLE
 
     private fun buildDetail(s: Strip): View {
-        val secs = sectionsFor(s)
+        val mus = Mode.musician
+        // MÚSICO: del canal, solo GATE, COMPRESOR y EQ (sin CONFIG ni envíos a otros monitores).
+        val secs = if (mus) sectionsFor(s).filter { it == Section.GATE || it == Section.DYN || it == Section.EQ }.ifEmpty { listOf(Section.EQ) }
+        else sectionsFor(s)
         if (section !in secs) section = secs.first()
 
         val root = col()
@@ -950,10 +1138,14 @@ class MainActivity : Activity() {
         }
         bar.addView(View(this), lp(0, 1, 1f))
         // COPIAR / PEGAR seteos de esta tira.
-        val cp = Btn(this, if (Layout.compact) "📋" else "📋 COPIAR", BtnStyle.OUTLINE, sz(15f, 16f))
-        cp.maxLines = 1
-        cp.setOnClickListener { clipMenu(cp, s) }
-        bar.addView(cp, lp(dp(sz(120, 54)), dp(42)).m(r = dp(6)))
+        if (mus) {
+            bar.addView(label("⚠ cambia también lo que suena en la sala", sz(13f, 11f), C.YELLOW, Gravity.END or Gravity.CENTER_VERTICAL).also { it.maxLines = 1 }, lp(WRAP, dp(42)).m(r = dp(10)))
+        } else {
+            val cp = Btn(this, if (Layout.compact) "📋" else "📋 COPIAR", BtnStyle.OUTLINE, sz(15f, 16f))
+            cp.maxLines = 1
+            cp.setOnClickListener { clipMenu(cp, s) }
+            bar.addView(cp, lp(dp(sz(120, 54)), dp(42)).m(r = dp(6)))
+        }
         val prev = Btn(this, "‹", BtnStyle.OUTLINE, 24f)
         prev.setOnClickListener { step(s, -1) }
         bar.addView(prev, lp(dp(54), dp(42)).m(r = dp(6)))
@@ -965,8 +1157,9 @@ class MainActivity : Activity() {
         val body = row()
         body.gravity = Gravity.TOP
         body.setPadding(dp(4), dp(4), dp(4), dp(4))
-        if (Layout.compact) body.addView(stripView(s, SendTarget.MAIN) {}, lp(dp(96), MATCH).m(r = dp(4)))
-        else body.addView(stripView(s, SendTarget.MAIN) {}, lp(0, MATCH, 1f).m(r = dp(4)))
+        val tgt = if (mus) SendTarget(bus = Mode.musicianBus) else SendTarget.MAIN
+        if (Layout.compact) body.addView(stripView(s, tgt) {}, lp(dp(96), MATCH).m(r = dp(4)))
+        else body.addView(stripView(s, tgt) {}, lp(0, MATCH, 1f).m(r = dp(4)))
         val panel = FrameLayout(this)
         panel.background = rounded(C.PANEL, 14)
         panel.addView(Panels.build(this, s, section), FrameLayout.LayoutParams(MATCH, MATCH))
@@ -1009,11 +1202,16 @@ class MainActivity : Activity() {
             pm.menu.add(1, 101, 101, "Pegar ${c.label} en varios…")
             pm.menu.add(1, 102, 102, "Borrar lo copiado")
         }
+        // PRESETS de canal: guardados en el dispositivo, se cargan en cualquier tira del mismo tipo.
+        pm.menu.add(2, 200, 200, "★ Guardar como preset…")
+        if (Presets.stripPresets(this, s).isNotEmpty()) pm.menu.add(2, 201, 201, "★ Cargar preset…")
         pm.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 100 -> confirmPaste(listOf(s))
                 101 -> pasteMany()
                 102 -> Clipboard.clear()
+                200 -> saveStripPreset(s)
+                201 -> loadStripPreset(s)
                 else -> {
                     val w = opts[item.itemId]
                     Clipboard.copy(s, w) { n ->
@@ -1024,6 +1222,55 @@ class MainActivity : Activity() {
             true
         }
         pm.show()
+    }
+
+    private fun saveStripPreset(s: Strip) {
+        val edit = EditText(this)
+        edit.setTextColor(Color.WHITE)
+        edit.hint = "Ej.: VOZ GARKO EN BAR"
+        edit.setSingleLine()
+        edit.filters = arrayOf(android.text.InputFilter.LengthFilter(32))
+        val box = FrameLayout(this)
+        box.setPadding(dp(24), dp(8), dp(24), 0)
+        box.addView(edit)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Guardar ${s.title} como preset")
+            .setMessage("Guarda EQ, compresor, gate y filtro (no nombre, entrada, GAIN, 48V ni envíos).")
+            .setView(box)
+            .setPositiveButton("Guardar") { _, _ ->
+                val name = edit.text.toString().trim().ifEmpty { s.title }
+                Presets.saveStrip(this, s, name) { n ->
+                    Toast.makeText(this, if (n > 0) "★ Preset \"$name\" guardado" else "No se pudo leer de la consola: ¿está conectada?", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
+    }
+
+    private fun loadStripPreset(s: Strip) {
+        val list = Presets.stripPresets(this, s)
+        if (list.isEmpty()) return
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Cargar preset en ${s.title}")
+            .setItems(list.map { it.name }.toTypedArray()) { _, i ->
+                val p = list[i]
+                AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle("★ ${p.name}")
+                    .setMessage("Reemplaza la configuración de ${s.title} (no toca nombre, entrada, GAIN, 48V ni envíos).")
+                    .setPositiveButton("Cargar") { _, _ ->
+                        Presets.applyStrip(p, s)
+                        Toast.makeText(this, "✓ Cargado en ${s.title}", Toast.LENGTH_SHORT).show()
+                        render()
+                    }
+                    .setNeutralButton("Borrar preset") { _, _ -> Presets.deleteStrip(this, p) }
+                    .setNegativeButton("Cancelar", null)
+                    .setOnDismissListener { hideBars() }
+                    .show()
+            }
+            .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { hideBars() }
+            .show()
     }
 
     private fun pasteMany() {
@@ -1490,11 +1737,6 @@ class MainActivity : Activity() {
         about.setOnClickListener { showAbout() }
         val bottom = row()
         bottom.addView(about, lp(dp(140), dp(38)))
-        // MODO DEMO: acá atrás a propósito (no en la pantalla de conexión).
-        val demo = Btn(this, if (Demo.on) "SALIR DEL DEMO" else "▶ MODO DEMO", BtnStyle.OUTLINE, 13f)
-        demo.setTextColor(if (Demo.on) C.YELLOW else C.TEXT_DIM)
-        demo.setOnClickListener { if (Demo.on) confirmStopDemo() else confirmStartDemo() }
-        bottom.addView(demo, lp(dp(160), dp(38)).m(l = dp(10)))
         left.addView(bottom, lp(MATCH, WRAP).m(t = dp(10)))
         Scenes.onStatus = { msg -> status.text = msg }
         Scenes.onSaveReady = { n, text -> onSceneRead(n, text) }
@@ -1587,6 +1829,7 @@ class MainActivity : Activity() {
         everConnected = false
         showLostBanner(false)
         Demo.start()
+        Mode.musicianBus = 0
         sends = SendTarget.MAIN
         detail = null
         tab = Tab.MIX
@@ -1610,6 +1853,9 @@ class MainActivity : Activity() {
         render()
         updateConn()
         App.store.requeryObserved()
+        Mode.musicianBus = 0
+        applyMode()
+        openStart(connection = true)
     }
 
     /** ACERCA DE: autoría, contacto y créditos. */

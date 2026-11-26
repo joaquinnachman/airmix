@@ -17,6 +17,7 @@ final class MixerClient {
     static let portX32 = 10023
     static let meterCount = 96
     static let rtaBins = 100
+    static let grCount = 39
 
     private var fd: Int32 = -1
     private let lock = NSLock()
@@ -55,6 +56,15 @@ final class MixerClient {
     /// Solo se pide el RTA mientras hay un EQ en pantalla.
     private(set) var rtaWanted = false
 
+    /// Reducción de ganancia (X Air /meters/6, dB): 16 gate de canal, 16 compresor de canal, 6 compresor de bus,
+    /// 1 compresor del main. Solo se pide mientras hay un GATE o un COMPRESOR en pantalla.
+    let gr: UnsafeMutablePointer<Float> = {
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: MixerClient.grCount)
+        p.initialize(repeating: 0, count: MixerClient.grCount)
+        return p
+    }()
+    private(set) var grWanted = false
+
     /// dB por medidor. Lo escribe el hilo RX y lo lee la UI (lectura sin bloqueo, a propósito).
     let meters: UnsafeMutablePointer<Float> = {
         let p = UnsafeMutablePointer<Float>.allocate(capacity: MixerClient.meterCount)
@@ -75,6 +85,7 @@ final class MixerClient {
     private let metersX32b = Osc.encode("/meters", [.s("/meters/2")])
     private let rtaXair = Osc.encode("/meters", [.s("/meters/4")])
     private let rtaX32 = Osc.encode("/meters", [.s("/meters/15")])
+    private let grXair = Osc.encode("/meters", [.s("/meters/6")])
     private let xinfo = Osc.encode("/xinfo")
     private let meterPrefix: [UInt8] = Array("/meters/".utf8)
 
@@ -119,6 +130,13 @@ final class MixerClient {
         rtaWanted = on
         for i in 0..<MixerClient.rtaBins { rta[i] = -100 }
         if on { enqueue("sub:rta", x32 ? rtaX32 : rtaXair) }
+    }
+
+    /// Medidor de reducción del gate y del compresor (solo X Air).
+    func setGr(_ on: Bool) {
+        grWanted = on && !x32
+        for i in 0..<MixerClient.grCount { gr[i] = 0 }
+        if grWanted { enqueue("sub:gr", grXair) }
     }
 
     func query(_ address: String) { enqueue(address + "?", Osc.encode(address)) }
@@ -341,6 +359,16 @@ final class MixerClient {
             }
             return true
         }
+        if !x32 && which == 6 {
+            var i = 0
+            while p + 1 < end && i < MixerClient.grCount {
+                let v = Int16(bitPattern: UInt16(b[p]) | (UInt16(b[p + 1]) << 8))
+                gr[i] = abs(Float(v) / 256)
+                i += 1
+                p += 2
+            }
+            return true
+        }
         if !x32 {
             if which != 1 { return true }
             var i = 0
@@ -421,6 +449,7 @@ final class MixerClient {
                         sendToMixer(metersXair, h)
                     }
                     if rtaWanted { sendToMixer(x32 ? rtaX32 : rtaXair, h) }
+                    if grWanted && !x32 { sendToMixer(grXair, h) }
                     if !alive { sendToMixer(xinfo, h) }
                 }
             }

@@ -221,6 +221,55 @@ fun Context.rackLcd(text: String, sp: Float): TextView {
 }
 
 object Rack {
+    private fun presetMenu(ctx: Context, anchor: View, n: Int) {
+        val pm = PopupMenu(ctx, anchor)
+        pm.menu.add(0, 0, 0, "★ Guardar FX $n como preset…")
+        val list = Presets.fxPresets(ctx).filter { it.type in Fx.typeOptions(n).indices }
+        list.forEachIndexed { i, p -> pm.menu.add(1, 100 + i, 100 + i, "Cargar: ${p.name}  ·  ${p.kind}") }
+        if (list.isNotEmpty()) pm.menu.add(2, 1, 999, "Borrar un preset…")
+        pm.setOnMenuItemClickListener { item ->
+            when {
+                item.itemId == 0 -> {
+                    val edit = android.widget.EditText(ctx)
+                    edit.setTextColor(android.graphics.Color.WHITE)
+                    edit.hint = "Ej.: REVERB VOZ"
+                    edit.setSingleLine()
+                    edit.filters = arrayOf(android.text.InputFilter.LengthFilter(32))
+                    android.app.AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                        .setTitle("Guardar FX $n como preset")
+                        .setView(edit)
+                        .setPositiveButton("Guardar") { _, _ ->
+                            val name = edit.text.toString().trim().ifEmpty { "FX $n" }
+                            Presets.saveFx(ctx, n, name) { k ->
+                                android.widget.Toast.makeText(ctx, if (k > 0) "★ Preset \"$name\" guardado" else "No se pudo leer el efecto: ¿está conectada la consola?", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .setNegativeButton("Cancelar", null)
+                        .show()
+                }
+                item.itemId == 1 -> {
+                    android.app.AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                        .setTitle("Borrar preset")
+                        .setItems(list.map { it.name }.toTypedArray()) { _, i -> Presets.deleteFx(ctx, list[i]) }
+                        .setNegativeButton("Cancelar", null)
+                        .show()
+                }
+                item.itemId >= 100 -> {
+                    val p = list[item.itemId - 100]
+                    Presets.applyFx(p, n)
+                    // Los parámetros cambian con el tipo: se vuelven a pedir.
+                    anchor.postDelayed({
+                        for (k in 1..64) App.store.forget("/fx/$n/par/${Fmt.two(k)}")
+                        for (k in 1..16) App.client?.query("/fx/$n/par/${Fmt.two(k)}")
+                    }, 900)
+                    android.widget.Toast.makeText(ctx, "✓ FX $n: ${p.name}", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            true
+        }
+        pm.show()
+    }
+
     /** Pantalla EFECTOS: un frente de rack por FX, uno abajo del otro. */
     fun build(ctx: Context): View = with(ctx) {
         val list = col()
@@ -260,6 +309,11 @@ object Rack {
             pm.show()
         }
         left.addView(lcd, lp(MATCH, 0, 1f).m(t = dp(4)))
+        // PRESETS de efecto: guardar el efecto tal como está y recuperarlo sin cargar la escena.
+        val pre = Btn(ctx, "★ PRESETS", BtnStyle.OUTLINE, sz(12f, 10f))
+        pre.maxLines = 1
+        pre.setOnClickListener { presetMenu(ctx, pre, n) }
+        left.addView(pre, lp(MATCH, dp(sz(30, 24))).m(t = dp(4)))
         face.addView(left, lp(dp(sz(200, 150)), MATCH))
 
         // --- centro: todas las perillas del efecto (scroll horizontal)

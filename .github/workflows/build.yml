@@ -98,7 +98,7 @@ jobs:
             UDID=$(xcrun simctl create "$NAME" "$TYPE") || return 0
             xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b > /dev/null
             xcrun simctl install "$UDID" "$APP"
-            for S in mezcla notas link config favoritos linecheck reloj efectos sala corte demo envios; do
+            for S in mezcla notas link config favoritos linecheck reloj efectos sala corte demo envios inicio modo musico; do
               xcrun simctl launch "$UDID" ar.joaquin.airmix -ip 10.255.255.1 -debugScreen "$S" > /dev/null
               sleep 7
               xcrun simctl io "$UDID" screenshot "../screens/ios-$NAME-$S.png"
@@ -120,6 +120,8 @@ jobs:
 
   release:
     needs: [android, ios]
+    # Solo main publica versión (la app avisa del update). Las ramas de trabajo solo compilan y sacan capturas.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

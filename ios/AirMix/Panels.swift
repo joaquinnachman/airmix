@@ -22,27 +22,40 @@ struct StripView: View {
         let faderAddr = send ?? strip.faderAddr
         let sendColor = target.bus > 0 ? BusColor.of(busColor.int ?? 0) : C.sends
         let k = compact
-        VStack(spacing: k ? 3 : 6) {
-            Text(strip.title).font(bf(k ? 9 : 11)).foregroundColor(Sector.of(strip.kind)).lineLimit(1).minimumScaleFactor(0.7).padding(.top, k ? 2 : 4)
-                .contentShape(Rectangle())
-                .onLongPressGesture(minimumDuration: 0.5) { StripSends.shared.show(strip) }
+        // MÚSICO: sin solo (en la XR12 es uno para toda la consola), sin paneo de sala y sin envíos a otros monitores.
+        let mus = Core.shared.musicianBus > 0
+        VStack(spacing: k ? 2 : 6) {
+            // Celular: el rótulo "CH 01" no ocupa una fila propia; va chiquito en la fila del S y los dB.
+            if !k {
+                Text(strip.title).font(bf(11)).foregroundColor(Sector.of(strip.kind)).lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
+                    .contentShape(Rectangle())
+                    .onLongPressGesture(minimumDuration: 0.5) { if !mus { StripSends.shared.show(strip) } }
+            }
             NameChip(strip: strip, height: k ? 26 : 34)
-                .padding(.horizontal, k ? 4 : 6)
+                .padding(.horizontal, k ? 3 : 6)
+                .padding(.top, k ? 3 : 0)
                 .contentShape(Rectangle())
                 .onTapGesture { onOpen(strip) }
                 // Mantener apretado el nombre (o el título) → envíos de esta tira a cada bus (no choca con mover el fader).
-                .onLongPressGesture(minimumDuration: 0.5) { StripSends.shared.show(strip) }
-            if let pan = strip.panAddr {
+                .onLongPressGesture(minimumDuration: 0.5) { if !mus { StripSends.shared.show(strip) } }
+            if let pan = strip.panAddr, !mus {
                 PanView(addr: pan).frame(height: k ? 18 : 26)
             } else {
-                Color.clear.frame(height: k ? 18 : 26)
+                Color.clear.frame(height: k ? 4 : 26)
             }
-            HStack {
-                ParamToggle("S", addr: strip.soloAddr, color: C.solo, style: .small, size: k ? 11 : 14).frame(width: k ? 26 : 34, height: k ? 22 : 28)
-                Spacer(minLength: 0)
+            HStack(spacing: 2) {
+                if !mus {
+                    ParamToggle("S", addr: strip.soloAddr, color: C.solo, style: .small, size: k ? 11 : 14).frame(width: k ? 24 : 34, height: k ? 22 : 28)
+                }
+                if k {
+                    Text(strip.title).font(bf(9)).foregroundColor(Sector.of(strip.kind)).lineLimit(1).minimumScaleFactor(0.6)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Spacer(minLength: 0)
+                }
                 DbLabel(addr: faderAddr, color: send != nil ? sendColor : C.text)
             }
-            .padding(.horizontal, k ? 4 : 6)
+            .padding(.horizontal, k ? 3 : 6)
             HStack(spacing: 2) {
                 // MAIN LR: el fader se protege de roces (hay que mantenerlo apretado ~0,6 s para moverlo).
                 FaderView(addr: faderAddr, fill: send != nil ? sendColor : Sector.of(strip.kind), guarded: strip.kind == .lr && faderAddr == strip.faderAddr)
@@ -61,9 +74,9 @@ struct StripView: View {
                     ParamToggle("MUTE", addr: strip.onAddr, invert: true, color: C.mute, style: .mute, size: k ? 13 : 16)
                 }
             }
-            .frame(height: k ? 32 : 46)
-            .padding(.horizontal, k ? 4 : 6)
-            .padding(.bottom, k ? 4 : 6)
+            .frame(height: k ? 28 : 46)
+            .padding(.horizontal, k ? 3 : 6)
+            .padding(.bottom, k ? 3 : 6)
         }
         .background(C.strip)
         .id(faderAddr)
@@ -164,6 +177,19 @@ struct ConfigPanel: View {
     var body: some View {
         let c = Core.shared.console
         VStack(spacing: 14) {
+            // Bus de X Air: qué sale por la salida física AUX OUT con el mismo número, y desde qué punto.
+            let out = AuxOut.of(strip)
+            if out > 0 {
+                Card(title: "SALIDA FÍSICA  ·  AUX OUT \(out)") {
+                    HStack(spacing: 14) {
+                        ListSelector("SALE", addr: AuxOut.srcAddr(out), options: AuxOut.src).frame(width: 200, height: 52)
+                        ListSelector("DESDE", addr: AuxOut.posAddr(out), options: AuxOut.pos).frame(width: 220, height: 52)
+                        Spacer(minLength: 0)
+                    }
+                    Text("Lo que manda la consola por el conector AUX OUT \(out) de atrás. Para un monitor: el BUS \(out), desde POST FADER.")
+                        .font(bf(13)).foregroundColor(C.dim).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
             Card(title: "IDENTIDAD") {
                 HStack(spacing: 12) {
                     TextField("Nombre", text: $name)
@@ -390,6 +416,9 @@ struct GatePanel: View {
                 }
                 HStack(alignment: .top, spacing: 18) {
                     DynGraphView(prefix: prefix, gate: true).frame(width: 210, height: 180)
+                    // Cuánto está cerrando el gate (X Air).
+                    let gi = GrMeterView.index(prefix, gate: true)
+                    if gi >= 0 { GrMeterView(index: gi, color: C.green).frame(width: 44, height: 180) }
                     VStack(alignment: .leading) {
                         HStack {
                             KnobView(Spec(label: "THRESHOLD", addr: "\(b)/thr", def: 0) { Fmt.db(Fmt.lin(-80, 0, $0)) })
@@ -431,6 +460,9 @@ struct DynPanel: View {
                 }
                 HStack(alignment: .top, spacing: 18) {
                     DynGraphView(prefix: prefix, gate: false).frame(width: 210, height: 180)
+                    // Cuánto está comprimiendo (X Air).
+                    let ci = GrMeterView.index(prefix, gate: false)
+                    if ci >= 0 { GrMeterView(index: ci, color: C.yellow).frame(width: 44, height: 180) }
                     VStack(alignment: .leading) {
                         HStack {
                             KnobView(Spec(label: "THRESHOLD", addr: "\(b)/thr", def: 1) { Fmt.db(Fmt.lin(-60, 0, $0)) })
@@ -852,5 +884,23 @@ private struct StripSendColumn: View {
         }
         .padding(.vertical, 4).padding(.horizontal, 3)
         .background(RoundedRectangle(cornerRadius: 10).fill(C.strip))
+    }
+}
+
+
+/// Salidas físicas AUX OUT de X Air (Parameters.txt fw 1.14: /routing/aux/01..06/src y /pos). Igual que AuxOut de Android.
+/// Hay tantas como buses tenga el modelo (XR12 2, XR16 4, XR18 6). En X32 no se muestra.
+enum AuxOut {
+    static let src: [String] = (1...16).map { "CH \(Fmt.two($0))" } + ["AUX L", "AUX R"] +
+        (1...4).flatMap { ["FX\($0) L", "FX\($0) R"] } + (1...6).map { "BUS \($0)" } + (1...4).map { "FX SEND \($0)" } +
+        ["MAIN L", "MAIN R"] + (1...18).map { "USB \($0)" }
+    static let pos = ["ENTRADA ANALÓG.", "ENTR. ANALÓG. + MUTE", "ENTRADA", "ENTRADA + MUTE", "PRE EQ", "PRE EQ + MUTE",
+                      "POST EQ", "POST EQ + MUTE", "PRE FADER", "PRE FADER + MUTE", "POST FADER"]
+    static func srcAddr(_ n: Int) -> String { "/routing/aux/\(Fmt.two(n))/src" }
+    static func posAddr(_ n: Int) -> String { "/routing/aux/\(Fmt.two(n))/pos" }
+    /// Número de AUX OUT para este bus (0 = no tiene).
+    static func of(_ s: Strip) -> Int {
+        let c = Core.shared.console
+        return s.kind == .bus && !c.isX32 && s.idx >= 1 && s.idx <= min(6, c.buses) ? s.idx : 0
     }
 }

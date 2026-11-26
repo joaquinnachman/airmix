@@ -21,9 +21,12 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     val col = col()
     col.setBackgroundColor(C.STRIP)
     val k = Layout.compact
+    // MÚSICO: sin solo (en la XR12 es uno para toda la consola), sin paneo de sala y sin envíos a otros monitores.
+    val mus = Mode.musician
 
-    val title = label(s.title, sz(12f, 10f), Sector.of(s.kind))
-    col.addView(title, lp(MATCH, dp(sz(24, 16))).m(t = dp(sz(6, 3))))
+    // Celular: el rótulo "CH 01" no ocupa una fila propia; va chiquito en la fila del S y los dB.
+    val title = label(s.title, sz(12f, 9f), Sector.of(s.kind))
+    if (!k) col.addView(title, lp(MATCH, dp(24)).m(t = dp(6)))
 
     val name = label(s.title, sz(15f, 12f))
     name.setPadding(dp(4), 0, dp(4), 0)
@@ -31,27 +34,33 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     applyScribble(name, 0)
     name.setOnClickListener { onOpen(s) }
     // Mantener apretado el nombre (o el título) → envíos de esta tira a cada bus (no choca con mover el fader).
-    if (s.sendAddr(SendTarget(bus = 1)) != null) {
+    if (!mus && s.sendAddr(SendTarget(bus = 1)) != null) {
         name.setOnLongClickListener { StripSends.show(name, s); true }
         title.setOnLongClickListener { StripSends.show(title, s); true }
     }
     name.bind(s.nameAddr) { v -> name.text = v.toString().ifEmpty { s.title } }
     name.bind(s.colorAddr) { v -> applyScribble(name, v.asI()) }
-    col.addView(name, lp(MATCH, dp(sz(36, 26))).m(dp(sz(8, 4)), 0, dp(sz(8, 4)), dp(sz(6, 3))))
+    col.addView(name, lp(MATCH, dp(sz(36, 26))).m(dp(sz(8, 3)), dp(if (k) 3 else 0), dp(sz(8, 3)), dp(sz(6, 2))))
 
     val pan = s.panAddr
-    if (pan != null) col.addView(PanView(this, pan), lp(MATCH, dp(sz(30, 20))))
-    else col.addView(View(this), lp(MATCH, dp(sz(30, 20))))
+    if (pan != null && !mus) col.addView(PanView(this, pan), lp(MATCH, dp(sz(30, 18))))
+    else col.addView(View(this), lp(MATCH, dp(sz(30, 6))))
 
     val sendAddr = s.sendAddr(target)
     val faderAddr = sendAddr ?: s.faderAddr
     val info = row()
-    info.setPadding(dp(sz(8, 4)), 0, dp(sz(8, 4)), 0)
-    info.addView(toggle("S", s.soloAddr, BtnStyle.SMALL, color = C.SOLO, sp = sz(15f, 12f)), lp(dp(sz(38, 28)), dp(sz(32, 24))))
-    val dbText = label("", sz(14f, 11f), if (sendAddr != null) C.SENDS else C.TEXT, Gravity.END or Gravity.CENTER_VERTICAL)
+    info.gravity = Gravity.CENTER_VERTICAL
+    info.setPadding(dp(sz(8, 3)), 0, dp(sz(8, 3)), 0)
+    if (!mus) info.addView(toggle("S", s.soloAddr, BtnStyle.SMALL, color = C.SOLO, sp = sz(15f, 11f)), lp(dp(sz(38, 24)), dp(sz(32, 22))))
+    if (k) {
+        title.maxLines = 1
+        title.fitOneLine(7)
+        info.addView(title, lp(0, dp(22), 1f))
+    }
+    val dbText = label("", sz(14f, 10f), if (sendAddr != null) C.SENDS else C.TEXT, Gravity.END or Gravity.CENTER_VERTICAL)
     dbText.fitOneLine(7)
-    info.addView(dbText, lp(0, dp(sz(32, 24)), 1f))
-    col.addView(info, lp(MATCH, dp(sz(40, 28))))
+    info.addView(dbText, lp(0, dp(sz(32, 22)), 1f))
+    col.addView(info, lp(MATCH, dp(sz(40, 24))))
 
     val faderRow = row()
     val fader = FaderView(this)
@@ -88,7 +97,7 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     // MAIN LR: mutear exige mantener apretado 2 s (para no mutear el PA sin querer). Desmutear: un toque.
     val mute: View = if (s.kind == Kind.LR) HoldMuteBtn(this, s.onAddr, sz(18f, 13f))
     else toggle("MUTE", s.onAddr, BtnStyle.MUTE, invert = true, color = C.MUTE, sp = sz(18f, 13f))
-    col.addView(mute, lp(MATCH, dp(sz(48, 34))).m(dp(sz(8, 4)), dp(sz(6, 3)), dp(sz(8, 4)), dp(sz(10, 5))))
+    col.addView(mute, lp(MATCH, dp(sz(48, 30))).m(dp(sz(8, 3)), dp(sz(6, 2)), dp(sz(8, 3)), dp(sz(10, 3))))
     if (k) col.setPadding(0, 0, 0, 0)
     return col
 }
@@ -228,6 +237,16 @@ object Panels {
 
     private fun config(ctx: Context, s: Strip): View = with(ctx) {
         val root = panelRoot()
+        // Bus de X Air: qué sale por la salida física AUX OUT con el mismo número, y desde qué punto.
+        val out = AuxOut.of(s)
+        if (out > 0) {
+            val oc = addCard(root, "SALIDA FÍSICA  ·  AUX OUT $out")
+            val r = row()
+            r.addView(selector("SALE", AuxOut.srcAddr(out), AuxOut.SRC), lp(dp(sz(220, 180)), dp(56)))
+            r.addView(selector("DESDE", AuxOut.posAddr(out), AuxOut.POS), lp(dp(sz(240, 190)), dp(56)).m(l = dp(14)))
+            oc.addView(r)
+            oc.addView(label("Lo que manda la consola por el conector AUX OUT $out de atrás. Para un monitor: el BUS $out, desde POST FADER.", 13f, C.TEXT_DIM, Gravity.START).also { it.maxLines = 2 }, lp(MATCH, WRAP).m(t = dp(8)))
+        }
 
         val idCard = addCard(root, "IDENTIDAD")
         val r1 = row()
@@ -404,6 +423,8 @@ object Panels {
         main.addView(top)
         val mid = row()
         mid.addView(DynGraphView(ctx, p, true), lp(dp(220), dp(190)))
+        // Cuánto está cerrando el gate (X Air).
+        GrMeterView.index(p, true).let { if (it >= 0) mid.addView(GrMeterView(ctx, it, C.GREEN), lp(dp(44), dp(190)).m(l = dp(8))) }
         val knobs = col()
         knobs.addView(knobRow(
             Spec("THRESHOLD", "$b/thr", def = 0f) { Fmt.db(Fmt.lin(-80f, 0f, it)) },
@@ -440,6 +461,8 @@ object Panels {
         main.addView(top)
         val mid = row()
         mid.addView(DynGraphView(ctx, p, false), lp(dp(220), dp(190)))
+        // Cuánto está comprimiendo (X Air).
+        GrMeterView.index(p, false).let { if (it >= 0) mid.addView(GrMeterView(ctx, it, C.YELLOW), lp(dp(44), dp(190)).m(l = dp(8))) }
         val knobs = col()
         knobs.addView(knobRow(
             Spec("THRESHOLD", "$b/thr", def = 1f) { Fmt.db(Fmt.lin(-60f, 0f, it)) },
@@ -906,4 +929,24 @@ fun Context.stripSendsPanel(s: Strip): View {
     hs.addView(r, FrameLayout.LayoutParams(WRAP, MATCH))
     box.addView(hs, lp(MATCH, 0, 1f).m(t = dp(4)))
     return box
+}
+
+/**
+ * Salidas físicas AUX OUT de X Air (Parameters.txt fw 1.14: /routing/aux/01..06/src y /pos).
+ * Hay tantas como buses tenga el modelo (XR12 2, XR16 4, XR18 6). En X32 no se muestra.
+ */
+object AuxOut {
+    val SRC: List<String> = (1..16).map { "CH ${Fmt.two(it)}" } + listOf("AUX L", "AUX R") +
+        (1..4).flatMap { listOf("FX$it L", "FX$it R") } + (1..6).map { "BUS $it" } + (1..4).map { "FX SEND $it" } +
+        listOf("MAIN L", "MAIN R") + (1..18).map { "USB $it" }
+    val POS = listOf(
+        "ENTRADA ANALÓG.", "ENTR. ANALÓG. + MUTE", "ENTRADA", "ENTRADA + MUTE", "PRE EQ", "PRE EQ + MUTE",
+        "POST EQ", "POST EQ + MUTE", "PRE FADER", "PRE FADER + MUTE", "POST FADER"
+    )
+
+    fun srcAddr(n: Int) = "/routing/aux/${Fmt.two(n)}/src"
+    fun posAddr(n: Int) = "/routing/aux/${Fmt.two(n)}/pos"
+
+    /** Número de AUX OUT para este bus (0 = no tiene). */
+    fun of(s: Strip): Int = if (s.kind == Kind.BUS && !App.console.isX32 && s.idx in 1..minOf(6, App.console.buses)) s.idx else 0
 }

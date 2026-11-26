@@ -15,6 +15,10 @@ struct FaderView: View {
     @State private var holdProgress: CGFloat = 0
     @State private var holdToken = 0
     static let guardTime = 0.6
+    @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.horizontalSizeClass) private var hsc
+    /// Celular: cap más chico y angosto (no tapa los números de la escala).
+    private var small: Bool { vsc == .compact || hsc == .compact }
 
     private static let marks: [(Float, String)] = [(10, "+10"), (5, "+5"), (0, "0"), (-5, "-5"), (-10, "-10"), (-20, "-20"), (-30, "-30"), (-40, "-40"), (-60, "-60")]
     private static let labelOrder = [2, 8, 0, 5, 4, 7, 1, 6, 3]
@@ -27,7 +31,7 @@ struct FaderView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let capH: CGFloat = 28
+            let capH: CGFloat = small ? 24 : 28
             let top = capH / 2 + 6
             let travel = max(geo.size.height - capH - 12, 1)
             let value = p.float ?? 0
@@ -54,7 +58,7 @@ struct FaderView: View {
                 if value > 0 {
                     ctx.fill(Path(roundedRect: CGRect(x: cx - tw / 2, y: y, width: tw, height: bottom + 4 - y), cornerRadius: tw / 2), with: .color(fill))
                 }
-                let hw = min(24, size.width * 0.3)
+                let hw = small ? min(15, size.width * 0.22) : min(24, size.width * 0.3)
                 ctx.fill(Path(roundedRect: CGRect(x: cx - hw, y: y - capH / 2 + 3, width: hw * 2, height: capH), cornerRadius: 7), with: .color(.black.opacity(0.35)))
                 ctx.fill(Path(roundedRect: CGRect(x: cx - hw, y: y - capH / 2, width: hw * 2, height: capH), cornerRadius: 7), with: .color(dragging ? .white : C.cap))
                 ctx.fill(Path(roundedRect: CGRect(x: cx - hw, y: y, width: hw * 2, height: capH / 2), cornerRadius: 7), with: .color(C.capShade))
@@ -720,5 +724,46 @@ struct WifiQualityView: View {
         }
         .frame(width: small ? 32 : 40, height: small ? 32 : 38)
         .contentShape(Rectangle())
+    }
+}
+
+/// Medidor de reducción de ganancia (GR) del gate o del compresor, de arriba hacia abajo (0 a 24 dB).
+/// Lee Core.shared.client.gr (X Air /meters/6). Igual que GrMeterView de Android.
+struct GrMeterView: View {
+    let index: Int
+    let color: Color
+    private static let maxDb: Float = 24
+
+    /// Índice en /meters/6: 0-15 gate de canal, 16-31 compresor de canal, 32-37 compresor de bus, 38 main.
+    static func index(_ prefix: String, gate: Bool) -> Int {
+        if Core.shared.console.isX32 { return -1 }
+        let n = Int(prefix.split(separator: "/").last ?? "") ?? -1
+        if prefix.hasPrefix("/ch/") && (1...16).contains(n) { return gate ? n - 1 : 15 + n }
+        if prefix.hasPrefix("/bus/") && (1...6).contains(n) && !gate { return 31 + n }
+        if prefix == "/lr" && !gate { return 38 }
+        return -1
+    }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { _ in
+            Canvas { ctx, size in
+                let v = min(max(Core.shared.client.gr[index], 0), GrMeterView.maxDb)
+                let top: CGFloat = 22
+                let bot = size.height - 22
+                let x = size.width / 2
+                ctx.draw(Text("GR").font(bf(12)).foregroundColor(C.dim), at: CGPoint(x: x, y: 9))
+                ctx.fill(Path(roundedRect: CGRect(x: x - 9, y: top, width: 18, height: bot - top), cornerRadius: 4), with: .color(C.meterBg))
+                if v > 0.2 {
+                    ctx.fill(Path(roundedRect: CGRect(x: x - 9, y: top, width: 18, height: (bot - top) * CGFloat(v / GrMeterView.maxDb)), cornerRadius: 4), with: .color(color))
+                }
+                for d in [6, 12, 18] {
+                    let y = top + (bot - top) * CGFloat(d) / 24
+                    ctx.fill(Path(CGRect(x: x - 13, y: y - 0.5, width: 3, height: 1)), with: .color(C.tick))
+                }
+                ctx.draw(Text("-\(Int(v))").font(bf(12)).foregroundColor(v > 0.2 ? color : C.dim), at: CGPoint(x: x, y: size.height - 9))
+            }
+        }
+        .onAppear { Core.shared.client.setGr(true) }
+        .onDisappear { Core.shared.client.setGr(false) }
     }
 }

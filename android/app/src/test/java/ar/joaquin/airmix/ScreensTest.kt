@@ -64,6 +64,9 @@ class ScreensTest {
 
     private fun all(prefix: String) {
         val act = launch()
+        // Al abrir aparece la pantalla de inicio; para las capturas de siempre se la saca.
+        act.debugScreen("app")
+        idle()
         shoot(act, "$prefix-1-mezcla")
         call(act, "toggleNotes")
         shoot(act, "$prefix-2-notas")
@@ -80,6 +83,13 @@ class ScreensTest {
             idle()
             shoot(act, "$prefix-${5 + i}-$name")
         }
+        // Pantallas de inicio (conexión y elegir modo) y el modo MÚSICO.
+        for ((i, name) in listOf("inicio", "modo", "musico").withIndex()) {
+            act.debugScreen(name)
+            idle()
+            shoot(act, "$prefix-${13 + i}-$name")
+        }
+        Mode.musicianBus = 0
         // Deja el modo demo apagado para la próxima prueba (celular / tablet comparten el proceso).
         if (Demo.on) Demo.stop()
         App.store.incoming(chLinkAddr(7), 0)
@@ -92,4 +102,16 @@ class ScreensTest {
     @Test
     @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
     fun tablet() = all("tablet")
+
+    /** Celular con la letra del sistema agrandada (la interfaz compacta no se tiene que romper). */
+    @Test
+    @Config(qualifiers = "w780dp-h360dp-land-xxhdpi")
+    fun celularLetraGrande() {
+        RuntimeEnvironment.setFontScale(1.3f)
+        val act = launch()
+        act.debugScreen("app")
+        idle()
+        shoot(act, "celular-letra-grande-mezcla")
+        RuntimeEnvironment.setFontScale(1f)
+    }
 }
