@@ -2,6 +2,14 @@
 
 | Función | Android | iOS |
 |---|---|---|
+| Pantalla de inicio: conexión (radar, consolas encontradas, última usada, IP a mano, DEMO) | ✅ | ✅ |
+| Elegir modo al conectar: CONTROL TOTAL / MÚSICO con los monitores de la consola (nombre y color) | ✅ | ✅ |
+| MODO MÚSICO: envíos a su monitor, volumen y mute del monitor, mute y EQ/comp/gate de canales; sin main, sala, ganancia, efectos, escenas ni solo | ✅ | ✅ |
+| Celular: MEZCLA compacta (sin fila de arriba, TAP/SENDS en el riel, cap angosto) y letra del sistema grande controlada | ✅ | ✅ |
+| Medidor de reducción (GR) de gate y compresor (X Air /meters/6) | ✅ | ✅ |
+| Salidas físicas AUX OUT (X Air /routing/aux/NN/src y pos) en CONFIG del bus | ✅ | ✅ |
+| Presets de canal (guardar / cargar / borrar, en el dispositivo) | ✅ | ✅ |
+| Presets de efectos (tipo + parámetros) | ✅ | ✅ |
 | Conexión OSC (X Air 10024 / X32 10023, detección de modelo y puerto) | ✅ | ✅ |
 | Búsqueda de consolas en la red | ✅ broadcast | ✅ barrido de la subred (iOS no permite broadcast sin permiso especial de Apple) |
 | Capas: canales, aux, FX returns, buses, matrices (X32), FX sends (XR), DCA | ✅ | ✅ |

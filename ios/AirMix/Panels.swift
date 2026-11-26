@@ -891,9 +891,17 @@ private struct StripSendColumn: View {
 /// Salidas físicas AUX OUT de X Air (Parameters.txt fw 1.14: /routing/aux/01..06/src y /pos). Igual que AuxOut de Android.
 /// Hay tantas como buses tenga el modelo (XR12 2, XR16 4, XR18 6). En X32 no se muestra.
 enum AuxOut {
-    static let src: [String] = (1...16).map { "CH \(Fmt.two($0))" } + ["AUX L", "AUX R"] +
-        (1...4).flatMap { ["FX\($0) L", "FX\($0) R"] } + (1...6).map { "BUS \($0)" } + (1...4).map { "FX SEND \($0)" } +
-        ["MAIN L", "MAIN R"] + (1...18).map { "USB \($0)" }
+    static let src: [String] = {
+        var l: [String] = []
+        for i in 1...16 { l.append("CH " + Fmt.two(i)) }
+        l.append("AUX L"); l.append("AUX R")
+        for i in 1...4 { l.append("FX\(i) L"); l.append("FX\(i) R") }
+        for i in 1...6 { l.append("BUS \(i)") }
+        for i in 1...4 { l.append("FX SEND \(i)") }
+        l.append("MAIN L"); l.append("MAIN R")
+        for i in 1...18 { l.append("USB \(i)") }
+        return l
+    }()
     static let pos = ["ENTRADA ANALÓG.", "ENTR. ANALÓG. + MUTE", "ENTRADA", "ENTRADA + MUTE", "PRE EQ", "PRE EQ + MUTE",
                       "POST EQ", "POST EQ + MUTE", "PRE FADER", "PRE FADER + MUTE", "POST FADER"]
     static func srcAddr(_ n: Int) -> String { "/routing/aux/\(Fmt.two(n))/src" }
