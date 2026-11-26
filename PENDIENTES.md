@@ -19,7 +19,7 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 - Ideas del 31/10/2026 no elegidas: fader fino, ayuda con la ganancia, reloj por tema, notas por canal, botones de volumen de la tablet, ficha técnica de la escena, aviso de batería.
 - Del 12/11/2026, no elegidas: escena por tema, memorias A/B/C/D, aviso grande de envíos, ring out guiado, registro del show, plantilla GyP, modo escenario oscuro, segunda pantalla, prueba de línea paso a paso.
 - Del 01/11/2026, no elegidas: automix, PRE/POST de envíos, safes al cargar escenas, GEQ en buses/main, auriculares/solo.
-- Respaldo antes de cargar escena, mute groups, vista "mi monitor" para el dúo, medidor grande del MAIN: propuestos el 31/10/2026, Joaquín no los eligió.
+- Respaldo antes de cargar escena, mute groups, medidor grande del MAIN: propuestos el 31/10/2026, Joaquín no los eligió.
 - Del 22/11/2026, no elegidas: conexión sola a la última consola, aviso de canal con señal muteado, chequeo antes del show, comparar escena contra la consola, escenas en Google Drive, botón MUTE FX (en realidad ya existía en el riel; se queda como está), compatibilidad con Behringer Wing.
 - **Compatibilidad con otras marcas** (Soundcraft, Yamaha, Allen & Heath, etc.) ni un clon "Bis". Joaquín lo descartó el 22/10/2026: es demasiado trabajo. No volver a proponerlo.
 
@@ -64,6 +64,14 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 2. **Salidas físicas:** qué sale por AUX OUT 1/2 de la XR12 y desde qué punto.
 3. **Presets de canal:** guardar la configuración de un canal (EQ, compresor, gate…) y cargarla en otro.
 4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
+5. **MODO MÚSICO** (Joaquín, 26/11/2026; reemplaza la "vista mi monitor" descartada el 31/10): que un músico vea y ajuste solo su mezcla de bus, sin poder tocar el MAIN LR ni nada más.
+   - Propuesta de Claude (a confirmar con Joaquín):
+     - no preguntar cada vez que se abre: se activa una vez (ESCENAS → MODO MÚSICO), queda guardado y la app abre directo ahí;
+     - para salir, PIN de 4 dígitos que elige Joaquín (si no, el músico sale con un toque);
+     - pantalla: un fader por canal = su envío a ese bus, más el master del bus; nada de MAIN, GAIN/48V, EQ de canales, escenas, SALA ni efectos.
+   - Dudas abiertas: ¿bus fijo o puede elegir entre los buses? ¿puede tocar el master/mute/EQ de su bus? ¿PIN sí o no?
+   - Límite: es una restricción de la app; desde X-Air Edit u otra app se puede tocar todo igual (lo que protege es la clave del wifi de la consola).
+   - iPhone: sin App Store no se puede instalar fácil; en Android va con el mismo APK.
 ## Para probar en la XR12 (0.5.7)
 - **Calidad del wifi:** con la consola conectada, la luz al lado del loguito de wifi tiene que estar verde (tocala: muestra los ms). Alejarse con la tablet o cargar la red y ver que vaya hacia amarillo/rojo. Sin consola: gris.
 - **Envíos manteniendo apretado:** mantener apretado el nombre de un canal → panel con MON 1/2 y FX 1-4; mover un envío y ver que cambie en la consola (y en X-Air Edit). Tocar afuera cierra. Confirmar que mover el fader del canal no abre el panel.
