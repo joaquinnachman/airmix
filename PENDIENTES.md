@@ -72,7 +72,22 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
      - Cada panel explica claro para qué es. Es un solo toque.
    - **MÚSICO:** guiado para elegir su monitor (bus, con nombre y color) la primera vez; queda fijo y se recuerda, pero puede cambiarlo (por error o para ayudar a un compañero).
    - **Sin PIN.**
-   - Qué va y qué no va en MÚSICO: **a confirmar con Joaquín** (propuesta de Claude del 26/11 en el chat).
+   - **Qué va en MÚSICO** (confirmado por Joaquín, 26/11/2026):
+     - un fader por canal = su envío a ese monitor, con nombres y colores;
+     - retornos de efectos como tiras (más o menos reverb en su monitor);
+     - volumen general de su monitor y **MUTE de su monitor** ("puede que no sepa por qué no escucha y solo tenga que hacer click ahí");
+     - medidores de cada canal y de su monitor;
+     - **EQ, compresor y gate de los canales** ("capaz quiere hacer algo en su canal"); con un aviso chico de que eso cambia también lo que suena en la sala;
+     - reloj SHOW, NOTAS/TEMAS, candado y calidad del wifi.
+   - **Qué NO va en MÚSICO:**
+     - nada del MAIN LR (ni fader ni mute);
+     - faders y mutes de los canales (lo que suena en la sala);
+     - GAIN, 48V y ENTRADA;
+     - rack de efectos, TAP y MUTE FX;
+     - ESCENAS (cargar/guardar), SALA, COPIAR/PEGAR, LINE CHECK y LINK STEREO;
+     - los monitores de los otros, salvo que cambie de monitor a propósito;
+     - **EQ de su monitor** (no);
+     - **SOLO / S** (no: en la XR12 el solo es uno para toda la consola).
    - Límite: es una guía de la app, no una protección; desde X-Air Edit u otra app se puede tocar todo igual.
    - iPhone: sin App Store no se puede instalar fácil; en Android va con el mismo APK.
 ## Para probar en la XR12 (0.5.7)
