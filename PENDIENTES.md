@@ -64,13 +64,16 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 2. **Salidas físicas:** qué sale por AUX OUT 1/2 de la XR12 y desde qué punto.
 3. **Presets de canal:** guardar la configuración de un canal (EQ, compresor, gate…) y cargarla en otro.
 4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
-5. **MODO MÚSICO** (Joaquín, 26/11/2026; reemplaza la "vista mi monitor" descartada el 31/10): que un músico vea y ajuste solo su mezcla de bus, sin poder tocar el MAIN LR ni nada más.
-   - Propuesta de Claude (a confirmar con Joaquín):
-     - no preguntar cada vez que se abre: se activa una vez (ESCENAS → MODO MÚSICO), queda guardado y la app abre directo ahí;
-     - para salir, PIN de 4 dígitos que elige Joaquín (si no, el músico sale con un toque);
-     - pantalla: un fader por canal = su envío a ese bus, más el master del bus; nada de MAIN, GAIN/48V, EQ de canales, escenas, SALA ni efectos.
-   - Dudas abiertas: ¿bus fijo o puede elegir entre los buses? ¿puede tocar el master/mute/EQ de su bus? ¿PIN sí o no?
-   - Límite: es una restricción de la app; desde X-Air Edit u otra app se puede tocar todo igual (lo que protege es la clave del wifi de la consola).
+5. **MODO MÚSICO** (Joaquín, 26/11/2026; reemplaza la "vista mi monitor" descartada el 31/10).
+   - Idea de Joaquín: "no se trata tanto de censurar lo que hacen los músicos, sino guiarlos hacia una experiencia más localizada y ayudarlos a no mandarse cagadas".
+   - **Al abrir la app, siempre, antes de entrar:** pantalla de elección con dos paneles grandes y detallados, con dibujitos, que quede cheta:
+     - **CONTROL TOTAL** — Operador · Sonidista · Técnico. Es la app como está hoy, **sin cambios**.
+     - **MÚSICO** — Monitores · Asistente · Solo mezclas.
+     - Cada panel explica claro para qué es. Es un solo toque.
+   - **MÚSICO:** guiado para elegir su monitor (bus, con nombre y color) la primera vez; queda fijo y se recuerda, pero puede cambiarlo (por error o para ayudar a un compañero).
+   - **Sin PIN.**
+   - Qué va y qué no va en MÚSICO: **a confirmar con Joaquín** (propuesta de Claude del 26/11 en el chat).
+   - Límite: es una guía de la app, no una protección; desde X-Air Edit u otra app se puede tocar todo igual.
    - iPhone: sin App Store no se puede instalar fácil; en Android va con el mismo APK.
 ## Para probar en la XR12 (0.5.7)
 - **Calidad del wifi:** con la consola conectada, la luz al lado del loguito de wifi tiene que estar verde (tocala: muestra los ms). Alejarse con la tablet o cargar la red y ver que vaya hacia amarillo/rojo. Sin consola: gris.
