@@ -234,7 +234,7 @@ struct ContentView: View {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 let t = ShowTimer.elapsed()
                 VStack(spacing: 0) {
-                    Text("SHOW").font(bf(10)).foregroundColor(C.dim)
+                    if !small { Text("SHOW").font(bf(10)).foregroundColor(C.dim) }
                     Text(ShowTimer.format(t)).font(.system(size: small ? 17 : 22, weight: .bold, design: .monospaced))
                         .foregroundColor(ShowTimer.running ? C.green : (t > 0 ? C.solo : C.dim))
                     if !small { Text("tocá: ▶ / ❚❚").font(bf(9)).foregroundColor(C.tick) }
@@ -255,7 +255,7 @@ struct ContentView: View {
                             tab = .mix
                             detail = nil
                         }
-                        .frame(height: small ? 28 : 48)
+                        .frame(height: small ? 26 : 48)
                     }
                 }
             }

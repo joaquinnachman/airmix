@@ -759,7 +759,7 @@ class MainActivity : Activity() {
         val timerBox = col()
         timerBox.gravity = Gravity.CENTER
         timerBox.background = rounded(C.SURFACE, 12)
-        timerBox.addView(label("SHOW", sz(11f, 9f), C.TEXT_DIM), lp(MATCH, dp(sz(16, 12))))
+        if (!k) timerBox.addView(label("SHOW", 11f, C.TEXT_DIM), lp(MATCH, dp(16)))
         timerLabel = label("00:00", sz(24f, 17f), C.TEXT_DIM)
         lastTimerText = ""
         timerBox.addView(timerLabel, lp(MATCH, dp(sz(30, 22))))
@@ -777,7 +777,7 @@ class MainActivity : Activity() {
             updateTimer()
             true
         }
-        rail.addView(timerBox, lp(MATCH, dp(sz(76, 40))).m(dp(sz(10, 5)), dp(sz(10, 4)), dp(sz(10, 5)), dp(2)))
+        rail.addView(timerBox, lp(MATCH, dp(sz(76, 30))).m(dp(sz(10, 5)), dp(sz(10, 4)), dp(sz(10, 5)), dp(2)))
 
         val list = col()
         list.setPadding(dp(sz(10, 5)), dp(sz(8, 2)), dp(sz(10, 5)), dp(sz(8, 2)))
@@ -794,7 +794,7 @@ class MainActivity : Activity() {
                 render()
             }
             layerBtns.add(b)
-            list.addView(b, lp(MATCH, dp(sz(50, 28))).m(b = dp(sz(6, 2))))
+            list.addView(b, lp(MATCH, dp(sz(50, 26))).m(b = dp(sz(6, 2))))
         }
         val sv = ScrollView(this)
         sv.isVerticalScrollBarEnabled = false
@@ -827,16 +827,16 @@ class MainActivity : Activity() {
         }
         // Celular: 2 × 2 chiquito (NOTAS · MUTE FX / TAP · SENDS).
         val g1 = row()
-        g1.addView(notesBtn, lp(0, dp(30), 1f).m(r = dp(3)))
-        g1.addView(fx, lp(0, dp(30), 1.6f))
-        rail.addView(g1, lp(MATCH, WRAP).m(dp(5), dp(4), dp(5), 0))
+        g1.addView(notesBtn, lp(0, dp(28), 1f).m(r = dp(3)))
+        g1.addView(fx, lp(0, dp(28), 1.6f))
+        rail.addView(g1, lp(MATCH, WRAP).m(dp(5), dp(2), dp(5), 0))
         val g2 = row()
-        g2.addView(tapButton(), lp(0, dp(30), 1f).m(r = dp(3)))
+        g2.addView(tapButton(), lp(0, dp(28), 1f).m(r = dp(3)))
         val sel = Btn(this, "SENDS ▾", BtnStyle.OUTLINE, 11f)
         sel.maxLines = 1
         sel.setOnClickListener { showSendsPopup(sel) }
-        g2.addView(sel, lp(0, dp(30), 1f))
-        rail.addView(g2, lp(MATCH, WRAP).m(dp(5), dp(3), dp(5), dp(6)))
+        g2.addView(sel, lp(0, dp(28), 1f))
+        rail.addView(g2, lp(MATCH, WRAP).m(dp(5), dp(3), dp(5), dp(4)))
     }
 
     /** CLR SOLO: apaga todos los solos (vive en MEDIDORES y en el aviso "● SOLO" de arriba). */

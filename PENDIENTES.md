@@ -20,29 +20,13 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 - Del 12/11/2026, no elegidas: escena por tema, memorias A/B/C/D, aviso grande de envíos, ring out guiado, registro del show, plantilla GyP, modo escenario oscuro, segunda pantalla, prueba de línea paso a paso.
 - Del 01/11/2026, no elegidas: automix, PRE/POST de envíos, safes al cargar escenas, GEQ en buses/main, auriculares/solo.
 - Respaldo antes de cargar escena, mute groups, medidor grande del MAIN: propuestos el 31/10/2026, Joaquín no los eligió.
+- Beta aparte con vuelta atrás: Joaquín lo descartó el 26/11/2026.
 - Del 22/11/2026, no elegidas: conexión sola a la última consola, aviso de canal con señal muteado, chequeo antes del show, comparar escena contra la consola, escenas en Google Drive, botón MUTE FX (en realidad ya existía en el riel; se queda como está), compatibilidad con Behringer Wing.
 - **Compatibilidad con otras marcas** (Soundcraft, Yamaha, Allen & Heath, etc.) ni un clon "Bis". Joaquín lo descartó el 22/10/2026: es demasiado trabajo. No volver a proponerlo.
 
 ## Próxima versión
 
-1. **Celular: MEZCLA más acorde a la pantalla chica** (Joaquín, 24/11/2026, con captura de su celular en horizontal, 2340×1080).
-   - Joaquín: "Para tablet están perfectos los tamaños, pero para celu creo que podría ser mejor… capaz achicando botones". **La tablet no se toca.**
-   - Lo que se ve mal (su captura y también la captura del CI `android-celular-1-mezcla`):
-     - el recorrido del fader es corto: la parte útil ocupa menos de un tercio del alto; botones, títulos y barras se comen el resto;
-     - el riel izquierdo no entra: "BUSES" queda cortado detrás de NOTAS y no se ven FX RTN/BUSES/FAVS sin scroll; NOTAS y MUTE FX son enormes;
-     - en cada tira el nombre aparece dos veces (rótulo "CH 01" arriba + botón de nombre "CH 01");
-     - el cap del fader tapa las marcas de la escala ("-60" se lee "-6(", el "0" del MAIN tapado);
-     - la fila "CH 1-8 · TAP · SENDS ON FADER" ocupa una fila entera;
-     - pestañas y el chip "● SIN CONEXIÓN" muy anchos.
-   - Objetivo en celular: **el recorrido del fader ≥ 50 % del alto de la pantalla**, sin textos cortados ni encimados.
-   - Ideas para lograrlo (todo con `sz(…)` / `Layout.compact`, Android e iOS):
-     - sacar la fila de página: TAP y SENDS ON FADER pasan a la barra de arriba (más chicos) o al pie del riel; el nombre de la capa ya está marcado en el riel;
-     - tira: un solo nombre (el botón de color; el número "CH 01" chiquito adentro o al costado), paneo + S + valor en una sola fila, MUTE más bajo, cap del fader más chico, la escala sin quedar debajo del cap;
-     - riel: más angosto, letra más chica, todas las capas visibles; reloj SHOW, NOTAS (✎) y MUTE FX más chicos (una línea o ícono);
-     - barra de arriba: pestañas con letra más chica, chip de conexión corto (punto + "SIN CONEX." / nombre corto), candado y wifi más chicos.
-   - **Ojo:** en el celular de Joaquín se ve distinto que en el CI (por ejemplo, ahí sí aparecen los números de la escala); probablemente por el tamaño de letra/pantalla del sistema. Que el diseño compacto aguante letra del sistema grande (probar en el CI con `RuntimeEnvironment.setFontScale(1.3f)` además de 1.0, y una captura extra a 2340×1080).
-   - Revisar también en celular el detalle de canal, EFECTOS, MEDIDORES, SALA, ESCENAS y el panel de envíos, que usan la misma barra de arriba.
-2. **SALA: el ruido rosa tiene que salir de la consola al MAIN LR, no del parlante de la tablet** (Joaquín, 17/11/2026).
+1. **SALA: el ruido rosa tiene que salir de la consola al MAIN LR, no del parlante de la tablet** (Joaquín, 17/11/2026).
    - Joaquín: "la generación de ruido rosa sea desde la app hacia el main LR, es una función que tienen otras apps"; el parlante de la tablet "filtra y es malísimo".
    - Después él mide con alguno de los micrófonos.
    - **Límite técnico:** por wifi (OSC) la app solo manda órdenes, no audio. "Mandarlo desde la app" = prender el generador interno de la consola (oscilador / ruido rosa) por OSC y rutearlo al MAIN LR.
@@ -54,52 +38,31 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
      - en SALA, botón RUIDO ROSA → MAIN LR, con nivel (arranca bajo, por ejemplo -30 dB) y apagado automático al salir de SALA, al perder conexión o a los 60 s;
      - la medición usa ese ruido en vez del parlante, y el parlante de la tablet se saca.
    - **Si no existe:** avisarle a Joaquín con las alternativas, sin implementar nada.
-3. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
+2. **Clave de firma fuera del repo público** (quedó del pedido del aviso de actualización).
    - `android/airmix-debug.keystore` está en el historial público.
    - Moverla a un secreto de GitHub no alcanza: hace falta una clave nueva, lo que obliga a desinstalar una última vez.
    - Joaquín decide cuándo. **La tarea de los lunes no la hace sola.**
 
-## Futuro (Joaquín dijo "me interesa en el futuro", 01/11/2026; no hacer hasta que lo pida)
-1. **Medidor de reducción del compresor y del gate** en cada canal: cuánto está comprimiendo o cerrando.
-2. **Salidas físicas:** qué sale por AUX OUT 1/2 de la XR12 y desde qué punto.
-3. **Presets de canal:** guardar la configuración de un canal (EQ, compresor, gate…) y cargarla en otro.
-4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
-5. **MODO MÚSICO** (Joaquín, 26/11/2026; reemplaza la "vista mi monitor" descartada el 31/10).
-   - Idea de Joaquín: "no se trata tanto de censurar lo que hacen los músicos, sino guiarlos hacia una experiencia más localizada y ayudarlos a no mandarse cagadas".
-   - **Diseño aprobado por Joaquín (26/11/2026):** lienzo "AirMix — conexión y elección de modo" (https://claude.ai/artifact/XXZz3B3Gnu6fXggrDWBKtV), tablet y celular. Copiarlo tal cual.
-   - **Pantalla 1 · Conexión (siempre al abrir la app, primero):** como MX-MIX.
-     - radar buscando consolas en la red; las encontradas en una lista (modelo, nombre de la consola, IP) con CONECTAR;
-     - CONECTAR A MANO con campo de IP;
-     - BUSCAR DE NUEVO y **PROBAR SIN CONSOLA (DEMO)**: el modo demo pasa a esta pantalla (sale de ESCENAS);
-     - modelos compatibles abajo.
-   - **Pantalla 2 · ¿Cómo vas a usar AirMix hoy? (después de conectar, porque necesita los nombres de los buses):**
-     - arriba, la consola conectada con su modelo, nombre real e IP, y CAMBIAR CONSOLA (vuelve a la pantalla 1);
-     - dos paneles iguales, todo centrado, en este orden: dibujo → título → detalle → texto, y abajo lo que se toca:
-       - **CONTROL TOTAL** (coral) — OPERADOR · SONIDISTA · TÉCNICO — botón ENTRAR. Es la app como está hoy, **sin cambios**;
-       - **MÚSICO** (celeste) — MONITORES · ASISTENTE · SOLO MEZCLAS — la lista de monitores: un toque y entra directo en ese.
-     - cada monitor: "MONITOR N" (número de bus, con el color del bus) arriba y el **nombre del bus sacado de la consola** abajo, en grande; sin nombre → "SIN NOMBRE" en gris; el último usado marcado "ÚLTIMO".
-     - cuántos: los que tiene la consola conectada (`Console.buses`): XR12 2 (uno arriba del otro, a lo ancho), XR16 4, XR18 6 (2 columnas × 3), X32 16 (4 × 4, sin medidor).
-   - **MÚSICO:** el monitor elegido se recuerda, pero puede cambiarlo (por error o para ayudar a un compañero) volviendo a esta pantalla.
-   - **Sin PIN.**
-   - **Qué va en MÚSICO** (confirmado por Joaquín, 26/11/2026):
-     - un fader por canal = su envío a ese monitor, con nombres y colores;
-     - retornos de efectos como tiras (más o menos reverb en su monitor);
-     - volumen general de su monitor y **MUTE de su monitor** ("puede que no sepa por qué no escucha y solo tenga que hacer click ahí");
-     - medidores de cada canal y de su monitor;
-     - **EQ, compresor y gate de los canales** ("capaz quiere hacer algo en su canal"); con un aviso chico de que eso cambia también lo que suena en la sala;
-     - **MUTE de los canales** (Joaquín: "puede servir para ensayos");
-     - reloj SHOW, NOTAS/TEMAS, candado y calidad del wifi.
-   - **Qué NO va en MÚSICO:**
-     - nada del MAIN LR (ni fader ni mute);
-     - faders de los canales a la sala (los mutes sí van);
-     - GAIN, 48V y ENTRADA;
-     - rack de efectos, TAP y MUTE FX;
-     - ESCENAS (cargar/guardar), SALA, COPIAR/PEGAR, LINE CHECK y LINK STEREO;
-     - los monitores de los otros, salvo que cambie de monitor a propósito;
-     - **EQ de su monitor** (no);
-     - **SOLO / S** (no: en la XR12 el solo es uno para toda la consola).
-   - Límite: es una guía de la app, no una protección; desde X-Air Edit u otra app se puede tocar todo igual.
-   - iPhone: sin App Store no se puede instalar fácil; en Android va con el mismo APK.
+## Futuro
+- (vacío: todo lo que había se hizo en 0.6.0)
+
+## Para probar en la XR12 (0.6.0)
+- **Inicio:** al abrir, la pantalla de conexión tiene que encontrar la XR12 (o mostrarla como "Última usada"); CONECTAR → pasa sola a elegir modo. Probar también CONECTÁ A MANO y PROBAR SIN CONSOLA (DEMO).
+- **MÚSICO** (en el celular de un músico, con la tablet en CONTROL TOTAL al mismo tiempo): elegir MONITOR 1; mover faders y ver que cambian los envíos a ese bus (no la sala); MUTE de un canal; EQ de un canal (aparece el aviso); el volumen y el MUTE de su monitor. Confirmar que no aparece nada del MAIN.
+- **Celular:** MEZCLA con más recorrido de fader, todas las capas a la izquierda (también FAVS), TAP y SENDS abajo del riel; nada cortado. Probar con la letra del celular como la tenés siempre.
+- **GR:** con un compresor trabajando, la barrita amarilla al lado del gráfico tiene que bajar; con el gate, la verde. Dirección usada: X Air `/meters/6` (39 valores: 16 gate, 16 comp, 6 bus, main).
+- **AUX OUT:** en CONFIG de BUS 1 y 2, que "SALE" y "DESDE" muestren lo mismo que X-Air Edit (Routing → Aux Out). Direcciones: `/routing/aux/01..02/src` y `/pos` (Parameters.txt fw 1.14).
+- **Presets:** guardar el EQ/comp de la voz como preset y cargarlo en otro canal; guardar una reverb ajustada y cargarla en otro FX.
+
+## Hecho en 0.6.0 (26/11/2026)
+- **Pantalla de inicio** (StartScreen.kt / Start.swift), siempre al abrir: 1) conexión (radar, encontradas + última usada, IP a mano, BUSCAR DE NUEVO, DEMO — el demo salió de ESCENAS); 2) ¿CÓMO VAS A USAR AIRMIX HOY?: CONTROL TOTAL / MÚSICO con los monitores de la consola (MONITOR N + nombre, color del bus, ÚLTIMO). Diseño aprobado: lienzo https://claude.ai/artifact/XXZz3B3Gnu6fXggrDWBKtV.
+- **MODO MÚSICO** (Mode.musicianBus / Core.musicianBus): faders = envío a su bus (CH, AUX, FX RTN); a la derecha su monitor (volumen y mute, sin EQ); mute de canales; EQ/GATE/COMPRESOR de canales con aviso "cambia también lo que suena en la sala"; sin MAIN, faders de sala, paneo, GAIN/48V/ENTRADA, efectos, TAP, MUTE FX, escenas, SALA, COPIAR/PEGAR, LINE CHECK, LINK, SOLO ni envíos a otros monitores. Chip "🎧 MONITOR N · NOMBRE" arriba y CAMBIAR MONITOR.
+- **Celular compacto:** sin fila de arriba en MEZCLA (salvo SENDS ON FADER / MÚSICO / FAVS), TAP y SENDS en el riel (2 × 2 con NOTAS y MUTE FX), rótulo de la tira en la fila del S, MUTE más bajo, cap del fader 24 × 30 (no tapa la escala). Android: letra del sistema > 1 se lleva a 1 en celular. Captura extra en CI: celular-letra-grande-mezcla.
+- **GR** de gate y compresor (X Air /meters/6), solo con GATE o COMPRESOR en pantalla.
+- **Salidas físicas AUX OUT** en CONFIG del bus (X Air): fuente y punto.
+- **Presets de canal** (📋 → ★) y **de efectos** (EFECTOS → ★ PRESETS), guardados en el dispositivo.
+- CI: las ramas que no son main compilan y sacan capturas pero no publican versión.
+
 ## Para probar en la XR12 (0.5.7)
 - **Calidad del wifi:** con la consola conectada, la luz al lado del loguito de wifi tiene que estar verde (tocala: muestra los ms). Alejarse con la tablet o cargar la red y ver que vaya hacia amarillo/rojo. Sin consola: gris.
 - **Envíos manteniendo apretado:** mantener apretado el nombre de un canal → panel con MON 1/2 y FX 1-4; mover un envío y ver que cambie en la consola (y en X-Air Edit). Tocar afuera cierra. Confirmar que mover el fader del canal no abre el panel.
