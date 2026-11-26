@@ -52,7 +52,7 @@ fun Context.stripView(s: Strip, target: SendTarget, onOpen: (Strip) -> Unit): Vi
     info.gravity = Gravity.CENTER_VERTICAL
     info.setPadding(dp(sz(8, 3)), 0, dp(sz(8, 3)), 0)
     if (!mus) info.addView(toggle("S", s.soloAddr, BtnStyle.SMALL, color = C.SOLO, sp = sz(15f, 11f)), lp(dp(sz(38, 24)), dp(sz(32, 22))))
-    if (k) {
+    if (k && s.kind != Kind.LR) {
         title.maxLines = 1
         title.fitOneLine(7)
         info.addView(title, lp(0, dp(22), 1f))

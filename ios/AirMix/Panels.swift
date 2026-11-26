@@ -47,7 +47,7 @@ struct StripView: View {
                 if !mus {
                     ParamToggle("S", addr: strip.soloAddr, color: C.solo, style: .small, size: k ? 11 : 14).frame(width: k ? 24 : 34, height: k ? 22 : 28)
                 }
-                if k {
+                if k && strip.kind != .lr {
                     Text(strip.title).font(bf(9)).foregroundColor(Sector.of(strip.kind)).lineLimit(1).minimumScaleFactor(0.6)
                         .frame(maxWidth: .infinity)
                 } else {

@@ -777,10 +777,10 @@ class MainActivity : Activity() {
             updateTimer()
             true
         }
-        rail.addView(timerBox, lp(MATCH, dp(sz(76, 44))).m(dp(sz(10, 5)), dp(sz(10, 5)), dp(sz(10, 5)), dp(2)))
+        rail.addView(timerBox, lp(MATCH, dp(sz(76, 40))).m(dp(sz(10, 5)), dp(sz(10, 4)), dp(sz(10, 5)), dp(2)))
 
         val list = col()
-        list.setPadding(dp(sz(10, 5)), dp(sz(8, 3)), dp(sz(10, 5)), dp(sz(8, 3)))
+        list.setPadding(dp(sz(10, 5)), dp(sz(8, 2)), dp(sz(10, 5)), dp(sz(8, 2)))
         layers.forEachIndexed { i, l ->
             val b = Btn(this, l.label, BtnStyle.NAV, sz(15f, 11f))
             b.maxLines = 1
@@ -794,7 +794,7 @@ class MainActivity : Activity() {
                 render()
             }
             layerBtns.add(b)
-            list.addView(b, lp(MATCH, dp(sz(50, 32))).m(b = dp(sz(6, 3))))
+            list.addView(b, lp(MATCH, dp(sz(50, 28))).m(b = dp(sz(6, 2))))
         }
         val sv = ScrollView(this)
         sv.isVerticalScrollBarEnabled = false
@@ -827,15 +827,15 @@ class MainActivity : Activity() {
         }
         // Celular: 2 × 2 chiquito (NOTAS · MUTE FX / TAP · SENDS).
         val g1 = row()
-        g1.addView(notesBtn, lp(0, dp(32), 1f).m(r = dp(3)))
-        g1.addView(fx, lp(0, dp(32), 1.6f))
+        g1.addView(notesBtn, lp(0, dp(30), 1f).m(r = dp(3)))
+        g1.addView(fx, lp(0, dp(30), 1.6f))
         rail.addView(g1, lp(MATCH, WRAP).m(dp(5), dp(4), dp(5), 0))
         val g2 = row()
-        g2.addView(tapButton(), lp(0, dp(32), 1f).m(r = dp(3)))
+        g2.addView(tapButton(), lp(0, dp(30), 1f).m(r = dp(3)))
         val sel = Btn(this, "SENDS ▾", BtnStyle.OUTLINE, 11f)
         sel.maxLines = 1
         sel.setOnClickListener { showSendsPopup(sel) }
-        g2.addView(sel, lp(0, dp(32), 1f))
+        g2.addView(sel, lp(0, dp(30), 1f))
         rail.addView(g2, lp(MATCH, WRAP).m(dp(5), dp(3), dp(5), dp(6)))
     }
 

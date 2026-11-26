@@ -230,7 +230,7 @@ struct ContentView: View {
     // MARK: riel izquierdo
 
     private func rail(_ layers: [Layer]) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: small ? 4 : 8) {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 let t = ShowTimer.elapsed()
                 VStack(spacing: 0) {
@@ -248,14 +248,14 @@ struct ContentView: View {
             .onLongPressGesture { showBigTimer = true }
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 6) {
+                VStack(spacing: small ? 3 : 6) {
                     ForEach(layers) { l in
                         Pill(text: l.label, active: tab == .mix && layerIdx == l.id, activeColor: l.fav ? C.yellow : Sector.of(l.kind), style: .nav, size: small ? 11 : 14, idleColor: l.fav ? C.yellow : Sector.of(l.kind)) {
                             layerIdx = l.id
                             tab = .mix
                             detail = nil
                         }
-                        .frame(height: small ? 30 : 48)
+                        .frame(height: small ? 28 : 48)
                     }
                 }
             }
@@ -329,7 +329,7 @@ struct ContentView: View {
             HStack(spacing: 10) {
                 if mus {
                     // MÚSICO: el encabezado es su monitor, con el color del bus. Los faders son lo que le llega.
-                    SendTargetName(target: sends, prefix: "MONITOR \(core.musicianBus)  ·  ", inkOnColor: true).font(bf(small ? 13 : 20)).lineLimit(1).minimumScaleFactor(0.7)
+                    BusNameText(bus: core.musicianBus).font(bf(small ? 13 : 20)).lineLimit(1).minimumScaleFactor(0.7)
                     Text("lo que te llega").font(bf(small ? 11 : 15)).foregroundColor(C.ink.opacity(0.7)).lineLimit(1)
                     Spacer()
                     Button { core.startPage = 2 } label: {
@@ -1369,5 +1369,25 @@ struct MusicianChip: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(C.sends))
         }
         .buttonStyle(.plain)
+    }
+}
+
+
+/// "MONITOR n · NOMBRE" (nombre del bus en la consola), en el color de tinta sobre el color del bus.
+struct BusNameText: View {
+    let bus: Int
+    @ObservedObject private var name: Param
+    @ObservedObject private var color: Param
+
+    init(bus: Int) {
+        self.bus = bus
+        _name = ObservedObject(wrappedValue: Store.shared.param(Strip(kind: .bus, idx: bus).nameAddr))
+        _color = ObservedObject(wrappedValue: Store.shared.param(Strip(kind: .bus, idx: bus).colorAddr))
+    }
+
+    var body: some View {
+        let n = (name.value?.stringValue ?? "").trimmingCharacters(in: .whitespaces)
+        Text(n.isEmpty ? "MONITOR \(bus)" : "MONITOR \(bus)  ·  \(n.uppercased())")
+            .foregroundColor(BusColor.ink(color.int ?? 0))
     }
 }
