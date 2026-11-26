@@ -78,10 +78,11 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
      - volumen general de su monitor y **MUTE de su monitor** ("puede que no sepa por qué no escucha y solo tenga que hacer click ahí");
      - medidores de cada canal y de su monitor;
      - **EQ, compresor y gate de los canales** ("capaz quiere hacer algo en su canal"); con un aviso chico de que eso cambia también lo que suena en la sala;
+     - **MUTE de los canales** (Joaquín: "puede servir para ensayos");
      - reloj SHOW, NOTAS/TEMAS, candado y calidad del wifi.
    - **Qué NO va en MÚSICO:**
      - nada del MAIN LR (ni fader ni mute);
-     - faders y mutes de los canales (lo que suena en la sala);
+     - faders de los canales a la sala (los mutes sí van);
      - GAIN, 48V y ENTRADA;
      - rack de efectos, TAP y MUTE FX;
      - ESCENAS (cargar/guardar), SALA, COPIAR/PEGAR, LINE CHECK y LINK STEREO;
