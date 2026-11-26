@@ -66,11 +66,20 @@ Todo va en Android e iOS a la vez. Lo de "Próxima versión" se implementa en la
 4. **Presets de efectos:** guardar un efecto ajustado y recuperarlo sin cargar la escena.
 5. **MODO MÚSICO** (Joaquín, 26/11/2026; reemplaza la "vista mi monitor" descartada el 31/10).
    - Idea de Joaquín: "no se trata tanto de censurar lo que hacen los músicos, sino guiarlos hacia una experiencia más localizada y ayudarlos a no mandarse cagadas".
-   - **Al abrir la app, siempre, antes de entrar:** pantalla de elección con dos paneles grandes y detallados, con dibujitos, que quede cheta:
-     - **CONTROL TOTAL** — Operador · Sonidista · Técnico. Es la app como está hoy, **sin cambios**.
-     - **MÚSICO** — Monitores · Asistente · Solo mezclas.
-     - Cada panel explica claro para qué es. Es un solo toque.
-   - **MÚSICO:** guiado para elegir su monitor (bus, con nombre y color) la primera vez; queda fijo y se recuerda, pero puede cambiarlo (por error o para ayudar a un compañero).
+   - **Diseño aprobado por Joaquín (26/11/2026):** lienzo "AirMix — conexión y elección de modo" (https://claude.ai/artifact/XXZz3B3Gnu6fXggrDWBKtV), tablet y celular. Copiarlo tal cual.
+   - **Pantalla 1 · Conexión (siempre al abrir la app, primero):** como MX-MIX.
+     - radar buscando consolas en la red; las encontradas en una lista (modelo, nombre de la consola, IP) con CONECTAR;
+     - CONECTAR A MANO con campo de IP;
+     - BUSCAR DE NUEVO y **PROBAR SIN CONSOLA (DEMO)**: el modo demo pasa a esta pantalla (sale de ESCENAS);
+     - modelos compatibles abajo.
+   - **Pantalla 2 · ¿Cómo vas a usar AirMix hoy? (después de conectar, porque necesita los nombres de los buses):**
+     - arriba, la consola conectada con su modelo, nombre real e IP, y CAMBIAR CONSOLA (vuelve a la pantalla 1);
+     - dos paneles iguales, todo centrado, en este orden: dibujo → título → detalle → texto, y abajo lo que se toca:
+       - **CONTROL TOTAL** (coral) — OPERADOR · SONIDISTA · TÉCNICO — botón ENTRAR. Es la app como está hoy, **sin cambios**;
+       - **MÚSICO** (celeste) — MONITORES · ASISTENTE · SOLO MEZCLAS — la lista de monitores: un toque y entra directo en ese.
+     - cada monitor: "MONITOR N" (número de bus, con el color del bus) arriba y el **nombre del bus sacado de la consola** abajo, en grande; sin nombre → "SIN NOMBRE" en gris; el último usado marcado "ÚLTIMO".
+     - cuántos: los que tiene la consola conectada (`Console.buses`): XR12 2 (uno arriba del otro, a lo ancho), XR16 4, XR18 6 (2 columnas × 3), X32 16 (4 × 4, sin medidor).
+   - **MÚSICO:** el monitor elegido se recuerda, pero puede cambiarlo (por error o para ayudar a un compañero) volviendo a esta pantalla.
    - **Sin PIN.**
    - **Qué va en MÚSICO** (confirmado por Joaquín, 26/11/2026):
      - un fader por canal = su envío a ese monitor, con nombres y colores;
